@@ -39,6 +39,7 @@ typedef struct {
   uint64_t size;
   bool write;
   bool request;
+  uint32_t operand_id;
   uint32_t core_id;
   cycle_type start_cycle;
   cycle_type dram_enter_cycle;
