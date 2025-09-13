@@ -9,6 +9,7 @@ class Sram {
   bool check_full(int buffer_id);
   bool check_remain(size_t size, int buffer_id);
   bool check_allocated(addr_type address, int buffer_id);
+  std::array<bool,2> is_valid={true,true};
 
   void cycle();
   void flush(int buffer_id);

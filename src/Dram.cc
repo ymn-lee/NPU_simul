@@ -36,6 +36,8 @@ void SimpleDram::cycle() {
   _cycles++;
 }
 
+bool SimpleDram::is_available(uint32_t cid) { return false; }
+
 bool SimpleDram::is_full(uint32_t cid, MemoryAccess* request) { return false; }
 
 void SimpleDram::push(uint32_t cid, MemoryAccess* request) {
@@ -109,6 +111,8 @@ void DramRamulator::push(uint32_t cid, MemoryAccess* request) {
 
 bool DramRamulator::is_empty(uint32_t cid) { return _mem->isEmpty(cid); }
 
+bool DramRamulator::is_available(uint32_t cid) { return false; }
+
 MemoryAccess* DramRamulator::top(uint32_t cid) {
   assert(!is_empty(cid));
   return (MemoryAccess*)_mem->top(cid);
@@ -154,6 +158,14 @@ void DramRamulator2::cycle() {
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem[ch]->cycle();
   }
+}
+
+bool DramRamulator2::is_available(uint32_t cid) {
+  bool result  = _mem[cid]->is_available();
+  // if(result == true){
+  //   spdlog::info("full");
+  // }
+  return result ;
 }
 
 bool DramRamulator2::is_full(uint32_t cid, MemoryAccess* request) {
