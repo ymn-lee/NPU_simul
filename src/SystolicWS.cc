@@ -104,6 +104,26 @@ void SystolicWS::cycle() {
 
   if (!is_running)
     _stat_idle_cycle++;
+
+  if(is_compute_busy != turn_m){
+    if(is_compute_busy){
+        bubble_queue.push_back(_compute_pipeline.front()->src_addrs);
+      m_i_queue.push_back(_core_cycle);
+    }else{
+      m_o_queue.push_back(_core_cycle);
+    }
+  }
+
+  if(is_vector_busy != turn_v){
+    if(is_vector_busy){
+      v_i_queue.push_back(_core_cycle);
+    }else{
+      v_o_queue.push_back(_core_cycle);
+    }
+  }
+  turn_m = is_compute_busy;
+  turn_v = is_vector_busy;
+
   Core::cycle();
 }
 

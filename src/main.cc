@@ -6,6 +6,9 @@
 #include "helper/CommandLineParser.h"
 #include "operations/OperationFactory.h"
 
+
+#include <spdlog/sinks/basic_file_sink.h> // 파일 싱크 헤더
+
 namespace fs = std::filesystem;
 namespace po = boost::program_options;
 
@@ -23,6 +26,8 @@ int main(int argc, char** argv) {
       "mode", "choose default or language mode, default = default");
   cmd_parser.add_command_line_option<std::string>(
       "trace_file", "input trace file for language mode, default = input.csv");
+  cmd_parser.add_command_line_option<std::string>(
+      "save_name", "save_path, default = log.txt");
 
   try {
     cmd_parser.parse(argc, argv);
@@ -35,6 +40,12 @@ int main(int argc, char** argv) {
   char* onnxim_path_env = std::getenv("ONNXIM_HOME");
   std::string onnxim_path = onnxim_path_env != NULL?
     std::string(onnxim_path_env) : std::string("./");
+
+  std::string save_name = "log";
+  cmd_parser.set_if_defined("save_name", &save_name);
+  std::string log_file_name = save_name + ".txt";
+  auto file_logger = spdlog::basic_logger_mt("file_logger", log_file_name);
+  spdlog::set_default_logger(file_logger);
 
   std::string model_base_path = fs::path(onnxim_path).append("models");
   std::string level = "info";
@@ -97,6 +108,7 @@ int main(int argc, char** argv) {
         spdlog::error("Error opening file: {}", model_path);
         exit(EXIT_FAILURE);
       }
+      
       std::string input_trace = "input.csv";
       cmd_parser.set_if_defined("trace_file", &input_trace);
       model_config["trace_file"] = input_trace;
@@ -115,10 +127,11 @@ int main(int argc, char** argv) {
       MappingTable mapping_table = MappingTable::parse_mapping_file(mapping_path, config);
 
       auto model = std::make_unique<Model>(onnx_path, model_config, config, model_name, mapping_table);
-      spdlog::info("Register model: {}", model_name);
+      // spdlog::info("<> Register model: {}", model_name);
       simulator->register_model(std::move(model));
     }
   }
+
   simulator->run_simulator();
 
   /* Simulation time measurement */

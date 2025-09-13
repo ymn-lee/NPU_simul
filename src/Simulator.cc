@@ -73,6 +73,7 @@ Simulator::Simulator(SimulationConfig config, bool language_mode)
 
   //Configure Hardware Scheduler
   _scheduler = Scheduler::create(_config, &_core_cycles, &_core_time, this);
+  _scheduler->layer_finish.resize(config.num_cores, false);
   
   /* Create heap */
   std::make_heap(_models.begin(), _models.end(), CompareModel());
@@ -119,8 +120,23 @@ void Simulator::cycle() {
 
       for (int core_id = 0; core_id < _n_cores; core_id++) {
         std::unique_ptr<Tile> finished_tile = _cores[core_id]->pop_finished_tile();
+        int cold=0;
         if (finished_tile->status == Tile::Status::FINISH) {
           _scheduler->finish_tile(core_id, finished_tile->layer_id);
+          if(_scheduler->layer_finish[core_id]){
+              for (int i = 0; i < _n_cores; i++){
+                _cores[i]->flush_queue();
+                cold = _cores[i]->m_i_queue[0]-_scheduler->prev_layer_start.front();
+                if(cold<0){
+                  cold = _cores[i]->v_i_queue[0]-_scheduler->prev_layer_start.front(); 
+                }if(cold<0){
+                  cold = 0; 
+                }
+                spdlog::info("cold = {}", cold);
+              }
+              _scheduler->prev_layer_start.pop_front();
+              _scheduler->layer_finish[core_id] = false;
+            }
         }
         // Issue new tile to core
         if (!_scheduler->empty()) {

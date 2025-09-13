@@ -30,6 +30,16 @@ class Core {
 
   virtual cycle_type get_compute_cycles() { return _stat_tot_compute_cycle; }
 
+  virtual void flush_queue();
+  bool turn_m = false;
+  bool turn_v = false;
+  
+  std::vector<std::vector<addr_type>> bubble_queue;
+  std::deque<int> m_i_queue;
+  std::deque<int> v_i_queue;
+  std::deque<int> m_o_queue;
+  std::deque<int> v_o_queue;
+
  protected:
   virtual bool can_issue_compute(std::unique_ptr<Instruction>& inst);
   virtual cycle_type get_inst_compute_cycles(std::unique_ptr<Instruction>& inst) = 0;

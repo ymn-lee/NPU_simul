@@ -423,3 +423,25 @@ cycle_type Core::calculate_vector_op_iterations(uint32_t vector_size) {
   }
   return ret;
 }
+
+void Core::flush_queue(){
+  int busy_m_cycle = 0;
+  int busy_v_cycle = 0;
+  spdlog::info("core[{}] : m_i_queue : {}", _id, m_i_queue);
+  spdlog::info("core[{}] : m_o_queue : {}", _id, m_o_queue);
+  spdlog::info("core[{}] : v_i_queue : {}", _id, v_i_queue);
+  spdlog::info("core[{}] : v_o_queue : {}", _id, v_o_queue);
+  for(int i=0; i<m_i_queue.size(); ++i){
+    busy_m_cycle += m_o_queue[i] - m_i_queue[i];
+  }
+  for(int j=0; j<v_i_queue.size(); ++j){
+    busy_v_cycle += v_o_queue[j] - v_i_queue[j];
+  }
+  spdlog::info("core[{}] : m_busy = {}, v_busy = {}", _id, busy_m_cycle, busy_v_cycle);
+  spdlog::info("core[{}] : bubble : {}", _id, bubble_queue);
+  m_i_queue.clear();
+  m_o_queue.clear();
+  v_i_queue.clear();
+  v_o_queue.clear();
+  bubble_queue.clear();
+}
