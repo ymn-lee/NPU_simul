@@ -178,6 +178,7 @@ void Scheduler::finish_tile(uint32_t core_id, int layer_id) {
     _request_queue.front().model->set_layer_finish(layer_id);
     _layer_stat_map[layer_id] = _active_layers_map[layer_id];
     _active_layers_map.erase(layer_id);
+    layer_finish[core_id] = true;
   }
   refresh_status();
 }
