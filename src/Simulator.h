@@ -22,6 +22,8 @@ class Simulator {
   void run_simulator();
   const double get_tile_ops();
   const size_t get_number_tile() { return _tile_timestamp.size(); }
+  std::vector<uint32_t> core_turn;
+  std::vector<bool> idle_ld_cores;
   // void run_offline(std::string model_name, uint32_t sample_count);
   // void run_multistream(std::string model_name, uint32_t sample_count,
   // uint32_t ); void run_server(std::string trace_path);
@@ -30,6 +32,7 @@ class Simulator {
   bool running();
   void set_cycle_mask();
   void handle_model();
+  uint32_t get_dest_node(MemoryAccess* access, std::vector<bool> idle_ld_cores, std::vector<uint32_t> &core_turn, uint32_t core_id);
   uint32_t get_dest_node(MemoryAccess* access);
   SimulationConfig _config;
   uint32_t _n_cores;
