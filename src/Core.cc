@@ -158,9 +158,9 @@ void Core::cycle() {
       break;
     }
   }
-  if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
-    print_current_stats();
-  }
+  // if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
+  //   print_current_stats();
+  // }
 }
 
 bool Core::running() {
