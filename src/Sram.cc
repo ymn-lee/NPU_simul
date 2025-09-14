@@ -12,6 +12,8 @@ Sram::Sram(SimulationConfig config, const cycle_type& core_cycle, bool accum, ui
   int precision = config.precision;
   _current_size[0] = 0; // multiple of _data_width
   _current_size[1] = 0;
+  core_id = core_id;
+
   _accum = accum;
 }
 
@@ -76,6 +78,7 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, int co
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
     is_valid[buffer_id] = true; // tile 내부의 inst가 순차적으로 요청되게 traffic 조절
+    spdlog::info("valid : core={}, {} = {}, {}, {}",core_id, buffer_id, address, operand_id, _core_cycle);
     if(operand_id == 100 && can_issue_second_tile>0) { 
       can_issue_second_tile -- ; // 두 번째 input이 와야 두 번째 tile issue
     }

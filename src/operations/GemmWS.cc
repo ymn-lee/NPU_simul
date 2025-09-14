@@ -121,7 +121,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
     int m_loop = M_offset + loop_size > mapping.total_loop.M
                      ? mapping.total_loop.M - M_offset
                      : loop_size;
-    if(m_loop <= 0) break;
+    if (m_loop <= 0 && Ns >= mapping.tile_in_loop.N) break;
     /* MOVIN BIAS */
     if(!tile->accum && has_bias && Ms<mapping.tile_in_loop.M) { 
       std::vector<addr_type> bias_addrs;
@@ -179,7 +179,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
       int n_loop = N_offset + loop_size > mapping.total_loop.N
                         ? mapping.total_loop.N - N_offset
                         : loop_size;
-      if(n_loop <= 0) break;
+      if (n_loop <= 0 && Ms >= mapping.tile_in_loop.M) break;
       addr_type act_sp_addr =
           act_sp_base_addr +
           (Ns * mapping.tile_in_loop.C + Cs) * _config.precision;
@@ -258,6 +258,9 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
         ACCUM_SPAD_BASE +
         (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
     for(int c_iter = 0; c_iter < c_in_loop; c_iter+=_config.core_config[target_core].core_height) {
+      // if(act_sp_addr==272629760){
+      //   spdlog::info("dd = ");
+      // }
       int c_iter_size = c_in_loop - c_iter > _config.core_config[target_core].core_height ? _config.core_config[target_core].core_height : c_in_loop - c_iter;
       tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
           .opcode = Opcode::GEMM_PRELOAD,

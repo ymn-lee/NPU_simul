@@ -215,7 +215,8 @@ void Scheduler::refresh_status() {
     /* Check executable layer exist */
     if (new_layer == nullptr)
       return;
-
+    
+    prev_layer_start.push_back(*_core_cycle);
     spdlog::info("Start layer {}", new_layer->get_name().c_str());
     _request_queue.front().model->update_start_time(*_core_time);
     /* Get tiles from new layer */
