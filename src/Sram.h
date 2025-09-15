@@ -16,11 +16,11 @@ class Sram {
   int prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count);
   void count_up(addr_type, int buffer_id);
   void fill(addr_type address, int buffer_id);
-  void fill(addr_type address, addr_type dram_address, int buffer_id, int core_id, uint32_t operand_id);
   int get_size() { return _size; }
   int get_current_size(int buffer_id) { return _current_size[buffer_id]; }
   void print_all(int buffer_id);
   uint32_t can_issue_second_tile = 2;
+  uint32_t core_id;
 
  private:
   struct SramEntry {

@@ -85,11 +85,16 @@ void SystolicWS::cycle() {
   bool is_running = running();
   bool is_compute_busy = false;
   bool is_vector_busy = false;
+  bool core_run = false;
 
-  if (!_compute_pipeline.empty() && _compute_pipeline.front()->start_cycle <= _core_cycle)
+  if (!_compute_pipeline.empty() && _compute_pipeline.front()->start_cycle <= _core_cycle){ // imp_3_interleaved_tile
     is_compute_busy = true;
-  if (!_vector_pipeline.empty() && _vector_pipeline.front()->start_cycle <= _core_cycle)
+    core_run = true;
+  }
+  if (!_vector_pipeline.empty() && _vector_pipeline.front()->start_cycle <= _core_cycle){
     is_vector_busy = true;
+    core_run = true;
+  }
 
   if (is_compute_busy)
     _stat_systolic_active_cycle++;

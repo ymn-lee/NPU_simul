@@ -33,7 +33,7 @@ bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
   bool result = false;
   if(_tiles.size() < 1){
     result = true;
-  }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
+  }else if((_tiles.size() < 2) && (core_run)){
     result = true;
   }
   return result;
@@ -199,7 +199,7 @@ void Core::push_memory_response(MemoryAccess *response) {
     _acc_spad.fill(response->spad_address, response->buffer_id);
   } else {
     assert(_spad.check_allocated(response->spad_address, response->buffer_id));
-    _spad.fill(response->spad_address, response->dram_address, response->buffer_id, _id, response->operand_id); // imp_3_interleaved_tile
+    _spad.fill(response->spad_address, response->buffer_id);
   }
   delete response;
 }

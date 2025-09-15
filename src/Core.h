@@ -33,6 +33,7 @@ class Core {
   virtual void flush_queue();
   bool turn_m = false;
   bool turn_v = false;
+  bool core_run = false;
   
   std::vector<std::vector<addr_type>> bubble_queue;
   std::deque<int> m_i_queue;
