@@ -19,7 +19,7 @@ void SystolicWS::cycle() {
       if (_acc_spad.check_allocated(front->dest_addr, front->accum_spad_id)) {
         _acc_spad.count_up(front->dest_addr, front->accum_spad_id);
       } else {
-        int ret = _acc_spad.prefetch(front->dest_addr, front->accum_spad_id, front->size, front->zero_init? front->size : 1, front->operand_id==100 ? true : false); // imp_5 reuse_spad
+        int ret = _acc_spad.prefetch(front->dest_addr, front->accum_spad_id, front->size, front->zero_init? front->size : 1);
         if (!ret) {
           spdlog::error("Destination allocated: {} Size remain: {}", _acc_spad.check_allocated(front->dest_addr, front->accum_spad_id), _acc_spad.check_remain(front->size, front->accum_spad_id));
           spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
@@ -31,7 +31,7 @@ void SystolicWS::cycle() {
       if (_spad.check_allocated(front->dest_addr, front->spad_id)) {
         _spad.count_up(front->dest_addr, front->spad_id);
       } else {
-        int ret = _acc_spad.prefetch(front->dest_addr, front->accum_spad_id, front->size, front->zero_init? front->size : 1, front->operand_id==100 ? true : false); // imp_5 reuse_spad
+        int ret = _spad.prefetch(front->dest_addr, front->spad_id, front->size, front->zero_init? front->size : 1);
         if (!ret) {
           spdlog::error("Destination allocated: {} Size remain: {}", _spad.check_allocated(front->dest_addr, front->spad_id), _spad.check_remain(front->size, front->spad_id));
           spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
@@ -85,11 +85,16 @@ void SystolicWS::cycle() {
   bool is_running = running();
   bool is_compute_busy = false;
   bool is_vector_busy = false;
+  core_run = false;
 
-  if (!_compute_pipeline.empty() && _compute_pipeline.front()->start_cycle <= _core_cycle)
+  if (!_compute_pipeline.empty() && _compute_pipeline.front()->start_cycle <= _core_cycle){ // imp_3_interleaved_tile
     is_compute_busy = true;
-  if (!_vector_pipeline.empty() && _vector_pipeline.front()->start_cycle <= _core_cycle)
+    core_run = true;
+  }
+  if (!_vector_pipeline.empty() && _vector_pipeline.front()->start_cycle <= _core_cycle){
     is_vector_busy = true;
+    core_run = true;
+  }
 
   if (is_compute_busy)
     _stat_systolic_active_cycle++;
@@ -107,10 +112,14 @@ void SystolicWS::cycle() {
 
   if(is_compute_busy != turn_m){
     if(is_compute_busy){
+      // if(m_i_queue.size()>0){
         bubble_queue.push_back(_compute_pipeline.front()->src_addrs);
+      // }
       m_i_queue.push_back(_core_cycle);
+      // spdlog::info("core[{}] run : cycle={}", _id, _core_cycle);
     }else{
       m_o_queue.push_back(_core_cycle);
+      // spdlog::info("core[{}] idle : cycle={}", _id, _core_cycle);
     }
   }
 
@@ -123,7 +132,7 @@ void SystolicWS::cycle() {
   }
   turn_m = is_compute_busy;
   turn_v = is_vector_busy;
-
+  
   Core::cycle();
 }
 

@@ -20,6 +20,8 @@ class Core {
   virtual std::unique_ptr<Tile> pop_finished_tile();
 
   virtual void cycle();
+  uint32_t layer_num;
+  uint32_t layer_num_check;
 
   virtual bool has_memory_request();
   virtual void pop_memory_request();
@@ -33,6 +35,7 @@ class Core {
   virtual void flush_queue();
   bool turn_m = false;
   bool turn_v = false;
+  
   
   std::vector<std::vector<addr_type>> bubble_queue;
   std::deque<int> m_i_queue;
@@ -53,6 +56,7 @@ class Core {
 
   const uint32_t _id;
   const SimulationConfig _config;
+  bool core_run = false;
 
   cycle_type _core_cycle;
   

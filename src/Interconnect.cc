@@ -94,6 +94,8 @@ bool Booksim2Interconnect::running() {
 }
 
 void Booksim2Interconnect::cycle() {
+  _booksim->layer_num = layer_num;
+  _booksim->layer_num_check = layer_num_check;
   _booksim->run();
 }
 
