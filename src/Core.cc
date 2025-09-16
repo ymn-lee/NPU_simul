@@ -64,6 +64,7 @@ void Core::issue(std::unique_ptr<Tile> op) {
     acc_spad_id = (acc_spad_id + 1) % 2;
     _acc_spad.flush(acc_spad_id);
   }
+  spdlog::info("get_tile core=[{}, {}], cycle={}", _id, spad_id, _core_cycle);
   _current_layer_id = op->layer_id;
   _current_fused_op_id = op->fused_op_id;
 
