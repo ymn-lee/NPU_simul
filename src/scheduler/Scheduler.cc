@@ -105,7 +105,7 @@ std::unique_ptr<Tile> Scheduler::get_tile(uint32_t core_id) {
       std::unique_ptr<Tile> tile = std::move(_core_executable_tile_queue[core_id].front());
       _active_layers_map[tile->layer_id].launched_tiles++;
       _core_executable_tile_queue[core_id].pop_front();
-      spdlog::info("Layer {} Core {} Get Tile at {}", _active_layers_map[tile->layer_id].name, core_id,
+      spdlog::debug("Layer {} Core {} Get Tile at {}", _active_layers_map[tile->layer_id].name, core_id,
                     *_core_cycle);
       return tile;
     } else {

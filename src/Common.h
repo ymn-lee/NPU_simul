@@ -124,6 +124,7 @@ struct Tile {
   int accum_spad_id;
   int core_id = -1;
   bool inst_finished = false;
+  bool is_gemm = false;
 } ;
 
 uint32_t generate_id();

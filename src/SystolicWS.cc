@@ -96,7 +96,6 @@ void SystolicWS::cycle() {
     core_run = true;
   }
 
-
   if (is_compute_busy)
     _stat_systolic_active_cycle++;
   if (is_vector_busy)
@@ -113,10 +112,14 @@ void SystolicWS::cycle() {
 
   if(is_compute_busy != turn_m){
     if(is_compute_busy){
+      // if(m_i_queue.size()>0){
         bubble_queue.push_back(_compute_pipeline.front()->src_addrs);
+      // }
       m_i_queue.push_back(_core_cycle);
+      // spdlog::info("core[{}] run : cycle={}", _id, _core_cycle);
     }else{
       m_o_queue.push_back(_core_cycle);
+      // spdlog::info("core[{}] idle : cycle={}", _id, _core_cycle);
     }
   }
 
@@ -129,7 +132,7 @@ void SystolicWS::cycle() {
   }
   turn_m = is_compute_busy;
   turn_v = is_vector_busy;
-
+  
   Core::cycle();
 }
 

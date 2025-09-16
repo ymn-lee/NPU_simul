@@ -12,9 +12,8 @@ Sram::Sram(SimulationConfig config, const cycle_type& core_cycle, bool accum, ui
   int precision = config.precision;
   _current_size[0] = 0; // multiple of _data_width
   _current_size[1] = 0;
-  core_id = core_id;
-
   _accum = accum;
+  this->core_id = core_id;
 }
 
 bool Sram::check_hit(addr_type address, int buffer_id) {
@@ -62,7 +61,7 @@ int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
     assert(0);
     return 0;
   }
-
+  
   _cache_table[buffer_id][address] = SramEntry{.valid = false,
                                                .size = allocated_size,
                                                .remain_req_count = count,
@@ -70,15 +69,21 @@ int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
   return 1;
 }
 
-void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, int core_id, uint32_t operand_id) {
+void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32_t operand_id) {
   assert(check_allocated(address, buffer_id));
   assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
          !_cache_table[buffer_id].at(address).valid);
   _cache_table[buffer_id].at(address).remain_req_count--;
+  if(layer_num==layer_num_check){
+      if(address >= ACCUM_SPAD_BASE){
+        spdlog::info("[{}]core exec valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
+      }else{
+        spdlog::info("[{}]core load valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
+      }
+    }
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
     is_valid[buffer_id] = true; // tile 내부의 inst가 순차적으로 요청되게 traffic 조절
-    // spdlog::info("valid : core={}, {} = {}, {}, {}",core_id, buffer_id, address, operand_id, _core_cycle);
     if(operand_id == 100 && can_issue_second_tile>0) { 
       can_issue_second_tile -- ; // 두 번째 input이 와야 두 번째 tile issue
     }
@@ -97,6 +102,8 @@ void Sram::fill(addr_type address, int buffer_id) {
     spdlog::trace("MAKE valid {} {}F", buffer_id, address);
   }
 }
+
+
 
 void Sram::count_up(addr_type address, int buffer_id) {
   assert(check_allocated(address, buffer_id));
