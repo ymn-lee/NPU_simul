@@ -138,7 +138,8 @@ void Core::cycle() {  // imp_5 reuse
       buffer = &_spad;
       buffer_id = _tiles[i]->spad_id;
     }
-
+    buffer->layer_num = layer_num;
+    buffer->layer_num_check = layer_num_check;
     bool issued = false;
     if (inst->opcode == Opcode::MOVIN) {
       /*LD inst queue */
