@@ -33,7 +33,7 @@ bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
   bool result = false;
   if(_tiles.size() < 1){
     result = true;
-  }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
+  }else if((_tiles.size() < 2) && (core_run)){
     result = true;
   }
   return result;
