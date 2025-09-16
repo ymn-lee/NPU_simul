@@ -71,15 +71,6 @@ Simulator::Simulator(SimulationConfig config, bool language_mode)
     _cores[core_index] = Core::create(core_index, config);
   }
 
-  core_turn.resize(config.num_cores);
-  for(int i=0; i<config.num_cores; ++i){
-    core_turn[i]=0;
-  }
-  idle_ld_cores.resize(config.num_cores);
-  for(int i=0; i<config.num_cores; ++i){
-    idle_ld_cores[i]=true;
-  }
-
   //Configure Hardware Scheduler
   _scheduler = Scheduler::create(_config, &_core_cycles, &_core_time, this);
   _scheduler->layer_finish.resize(config.num_cores, false);
@@ -174,16 +165,13 @@ void Simulator::cycle() {
       for (int core_id = 0; core_id < _n_cores; core_id++) {
         // PUHS core to ICNT. memory request
         if (_cores[core_id]->has_memory_request()) {
-          idle_ld_cores[core_id] = false;
           MemoryAccess *front = _cores[core_id]->top_memory_request();
           front->core_id = core_id;
           if (!_icnt->is_full(core_id, front)) {
-            _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
+            _icnt->push(core_id, get_dest_node(front), front);
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
           }
-        }else{
-          idle_ld_cores[core_id] = true;
         }
         // Push response from ICNT. to Core.
         if (!_icnt->is_empty(core_id)) {
@@ -204,7 +192,8 @@ void Simulator::cycle() {
         // Pop response to ICNT from dram
         if (!_dram->is_empty(mem_id) &&
             !_icnt->is_full(_n_cores + mem_id, _dram->top(mem_id))) {
-          _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id), idle_ld_cores, core_turn, _dram->top(mem_id)->core_id), _dram->top(mem_id));  // imp_1_separated_ch
+          _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id)),
+                      _dram->top(mem_id));
           _dram->pop(mem_id);
           _nr_from_mem++;
         }
@@ -291,44 +280,6 @@ void Simulator::set_cycle_mask() {
 uint32_t Simulator::get_dest_node(MemoryAccess *access) {
   if (access->request) {
     return _config.num_cores + _dram->get_channel_id(access);
-  } else {
-    return access->core_id;
-  }
-}
-
-uint32_t Simulator::get_dest_node(MemoryAccess *access, std::vector<bool> idle_ld_cores, std::vector<uint32_t> &core_turn, uint32_t core_id) {
-  uint32_t cur_turn = core_turn[core_id];
-  uint32_t lower_2bit = _dram->get_channel_id(access) & 3;
-  uint32_t upper_2bit = core_id;
-  std::vector<bool> temp_idle_ld_cores = idle_ld_cores;
-  temp_idle_ld_cores[core_id] = true;
-  uint32_t result_id; 
-  bool available = true;
-
-  for(int j=0; j<4; ++j){
-    available = _dram->is_available(core_id*4+j);
-    if(!available) break;
-  }
-
-  if(!available){
-    for(int i=1; i<_config.num_cores; ++i){
-      int turn = (i+cur_turn)%_config.num_cores;
-      if(!temp_idle_ld_cores[turn]) continue;
-      for(int j=0; j<4; ++j){
-        available = _dram->is_available(turn*4+j);
-        if(!available) break;
-      }
-      if(!available) continue;
-      core_turn[core_id] = turn;
-      upper_2bit = turn;
-      break;
-    }
-  }
-  
-  result_id = _config.num_cores + ((upper_2bit & 3)<<2)+(lower_2bit & 3);
-
-  if (access->request) {
-    return result_id;
   } else {
     return access->core_id;
   }
