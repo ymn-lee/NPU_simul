@@ -83,6 +83,7 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id) {
     }
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
+    is_valid[buffer_id] = true;
     spdlog::trace("MAKE valid {} {}F", buffer_id, address);
   }
 }
