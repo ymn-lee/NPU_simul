@@ -119,6 +119,8 @@ void Simulator::cycle() {
       handle_model();
 
       for (int core_id = 0; core_id < _n_cores; core_id++) {
+        _cores[core_id]->layer_num = _scheduler->layer_num;
+        _cores[core_id]->layer_num_check = _scheduler->layer_num_check;
         std::unique_ptr<Tile> finished_tile = _cores[core_id]->pop_finished_tile();
         int cold=0;
         if (finished_tile->status == Tile::Status::FINISH) {
@@ -152,15 +154,20 @@ void Simulator::cycle() {
         _cores[core_id]->cycle();
       }
       _core_cycles++;
+      _dram->_core_cycle = _core_cycles;
     }
 
     // DRAM cycle
     if (_cycle_mask & DRAM_MASK) {
+      _dram->layer_num = _scheduler->layer_num;
+      _dram->layer_num_check = _scheduler->layer_num_check;
       _dram->cycle();
     }
     // Interconnect cycle
     if (_cycle_mask & ICNT_MASK) {
       _icnt_cycle++;
+      _icnt->layer_num = _scheduler->layer_num;
+      _icnt->layer_num_check = _scheduler->layer_num_check;
 
       for (int core_id = 0; core_id < _n_cores; core_id++) {
         // PUHS core to ICNT. memory request
@@ -171,6 +178,9 @@ void Simulator::cycle() {
             _icnt->push(core_id, get_dest_node(front), front);
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
+            if(_scheduler->layer_num==_scheduler->layer_num_check){
+              _dram->get_input_weight_req(get_dest_node(front)-_config.num_cores);
+            }
           }
         }
         // Push response from ICNT. to Core.

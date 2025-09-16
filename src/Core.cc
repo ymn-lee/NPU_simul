@@ -188,10 +188,10 @@ void Core::push_memory_response(MemoryAccess *response) {
   if (response->write) {
     _waiting_write_reqs--;
   } else if (response->spad_address >= ACCUM_SPAD_BASE) {
-    _acc_spad.fill(response->spad_address, response->buffer_id);
+    _acc_spad.fill(response->spad_address, response->dram_address, response->buffer_id);
   } else {
     assert(_spad.check_allocated(response->spad_address, response->buffer_id));
-    _spad.fill(response->spad_address, response->buffer_id);
+    _spad.fill(response->spad_address, response->dram_address, response->buffer_id);
   }
   delete response;
 }
@@ -276,9 +276,9 @@ void Core::finish_compute_pipeline(){
       _compute_pipeline.front()->finish_cycle <= _core_cycle) {
     std::unique_ptr<Instruction> inst = std::move(_compute_pipeline.front());
     if (inst->dest_addr >= ACCUM_SPAD_BASE)
-      _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
+      _acc_spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->accum_spad_id);
     else
-      _spad.fill(inst->dest_addr, inst->spad_id);
+      _spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->spad_id);
     if(inst->last_inst) {
       spdlog::trace("Finished last GEMM {}", inst->spad_id);
       inst->my_tile->inst_finished = true;
@@ -301,14 +301,14 @@ void Core::finish_vector_pipeline() {
         spdlog::error("Vector pipeline -> accum");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
       }
-      _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
+      _acc_spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->accum_spad_id);
     }
     else {
       if(!_spad.check_allocated(inst->dest_addr, inst->accum_spad_id)) {
         spdlog::error("Vector pipeline -> spad");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
       }
-      _spad.fill(inst->dest_addr, inst->spad_id);
+      _spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->spad_id);
     }
       
     if(inst->last_inst)

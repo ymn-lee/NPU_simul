@@ -36,6 +36,8 @@ void SimpleDram::cycle() {
   _cycles++;
 }
 
+void SimpleDram::get_input_weight_req(uint32_t cid){}
+
 bool SimpleDram::is_full(uint32_t cid, MemoryAccess* request) { return false; }
 
 void SimpleDram::push(uint32_t cid, MemoryAccess* request) {
@@ -109,6 +111,8 @@ void DramRamulator::push(uint32_t cid, MemoryAccess* request) {
 
 bool DramRamulator::is_empty(uint32_t cid) { return _mem->isEmpty(cid); }
 
+void DramRamulator::get_input_weight_req(uint32_t cid){}
+
 MemoryAccess* DramRamulator::top(uint32_t cid) {
   assert(!is_empty(cid));
   return (MemoryAccess*)_mem->top(cid);
@@ -152,7 +156,21 @@ bool DramRamulator2::running() {
 
 void DramRamulator2::cycle() {
   for (int ch = 0; ch < _n_ch; ch++) {
+    _mem[ch]->layer_num = layer_num;
+    _mem[ch]->layer_num_check = layer_num_check;
+    _mem[ch]->_dram_ch = ch;
     _mem[ch]->cycle();
+  }
+}
+
+void DramRamulator2::get_input_weight_req(uint32_t cid){
+  uint32_t total, input_size, weight_size;
+  auto sizes = _mem[cid]->get_input_weight_req();
+  total = sizes[0];
+  input_size = sizes[1];
+  weight_size = sizes[2];
+  if(layer_num==layer_num_check){
+    spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
   }
 }
 
