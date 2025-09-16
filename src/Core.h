@@ -20,6 +20,8 @@ class Core {
   virtual std::unique_ptr<Tile> pop_finished_tile();
 
   virtual void cycle();
+  uint32_t layer_num;
+  uint32_t layer_num_check;
 
   virtual bool has_memory_request();
   virtual void pop_memory_request();

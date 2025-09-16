@@ -52,8 +52,6 @@ void Core::issue(std::unique_ptr<Tile> op) {
   if (_tiles.size() == 1) {
     spad_id = _tiles[0]->spad_id;
     acc_spad_id = _tiles[0]->accum_spad_id;
-  }else{
-    _spad.can_issue_second_tile = 2;
   }
 
   /* Double buffer */
@@ -197,10 +195,10 @@ void Core::push_memory_response(MemoryAccess *response) {
   if (response->write) {
     _waiting_write_reqs--;
   } else if (response->spad_address >= ACCUM_SPAD_BASE) {
-    _acc_spad.fill(response->spad_address, response->buffer_id);
+    _acc_spad.fill(response->spad_address, response->dram_address, response->buffer_id);
   } else {
     assert(_spad.check_allocated(response->spad_address, response->buffer_id));
-    _spad.fill(response->spad_address, response->buffer_id);
+    _spad.fill(response->spad_address, response->dram_address, response->buffer_id);
   }
   delete response;
 }
@@ -285,9 +283,9 @@ void Core::finish_compute_pipeline(){
       _compute_pipeline.front()->finish_cycle <= _core_cycle) {
     std::unique_ptr<Instruction> inst = std::move(_compute_pipeline.front());
     if (inst->dest_addr >= ACCUM_SPAD_BASE)
-      _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
+      _acc_spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->accum_spad_id);
     else
-      _spad.fill(inst->dest_addr, inst->spad_id);
+      _spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->spad_id);
     if(inst->last_inst) {
       spdlog::trace("Finished last GEMM {}", inst->spad_id);
       inst->my_tile->inst_finished = true;
@@ -310,14 +308,14 @@ void Core::finish_vector_pipeline() {
         spdlog::error("Vector pipeline -> accum");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
       }
-      _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
+      _acc_spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->accum_spad_id);
     }
     else {
       if(!_spad.check_allocated(inst->dest_addr, inst->accum_spad_id)) {
         spdlog::error("Vector pipeline -> spad");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
       }
-      _spad.fill(inst->dest_addr, inst->spad_id);
+      _spad.fill(inst->dest_addr, inst->src_addrs.front(), inst->spad_id);
     }
       
     if(inst->last_inst)
@@ -327,7 +325,7 @@ void Core::finish_vector_pipeline() {
 }
 
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  if (!_ld_inst_queue.empty()) {
     std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
     if (front->opcode == Opcode::MOVIN) {
       bool prefetched = false;
@@ -339,7 +337,6 @@ void Core::handle_ld_inst_queue() {
       } else {
         buffer = &_spad;
         buffer_id = front->spad_id;
-        buffer->is_valid[buffer_id]=false;
       }
       if (front->size==0) {
         spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
@@ -359,7 +356,6 @@ void Core::handle_ld_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = false,
                               .request = true,
-                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id});
@@ -395,7 +391,6 @@ void Core::handle_st_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = true,
                               .request = true,
-                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id};
