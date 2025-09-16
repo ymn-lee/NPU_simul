@@ -327,7 +327,7 @@ void Core::finish_vector_pipeline() {
 }
 
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty()) {
+  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
     std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
     if (front->opcode == Opcode::MOVIN) {
       bool prefetched = false;
@@ -339,6 +339,7 @@ void Core::handle_ld_inst_queue() {
       } else {
         buffer = &_spad;
         buffer_id = front->spad_id;
+        buffer->is_valid[buffer_id]=false;
       }
       if (front->size==0) {
         spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
