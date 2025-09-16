@@ -73,7 +73,7 @@ void Scheduler::issue_tile_per_core(std::vector<uint32_t>& allowed_cpu, int offs
   }
 }
 
-void Scheduler::issue_tile_per_core() {
+void Scheduler::issue_tile_per_core() {  // imp_5 reuse_spad
   while(!_executable_tile_queue[0].empty()) {
     std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
     /* Barrier! */
@@ -88,6 +88,13 @@ void Scheduler::issue_tile_per_core() {
     }
     _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
     _executable_tile_queue[0].pop_front();
+    if(divided_c && !_executable_tile_queue[0].empty()){ 
+        std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
+        if (tile->status == Tile::Status::BAR)
+           break;
+        _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
+        _executable_tile_queue[0].pop_front();
+      }
   }
 }
 
@@ -226,6 +233,13 @@ void Scheduler::refresh_status() {
         std::make_move_iterator(new_layer->get_tiles().end())
     );
     new_layer->clear_tiles();
+
+    // imp_5 reuse_spad
+    uint32_t c_value = _executable_tile_queue[0].back()->C;
+    divided_c = false;
+    if(c_value != 0){
+      divided_c = true;
+    }
 
     _nr_layer++;
     _active_layers_map[new_layer->get_id()] =

@@ -16,11 +16,31 @@ Sram::Sram(SimulationConfig config, const cycle_type& core_cycle, bool accum, ui
   this->core_id = core_id;
 }
 
-bool Sram::check_hit(addr_type address, int buffer_id) {
+bool Sram::check_hit(addr_type address, int buffer_id) { // spad에 올라온 bias, weight 처리
   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end())
     return false;
   _cache_table[buffer_id].at(address).timestamp = _core_cycle;
   return _cache_table[buffer_id].at(address).valid;
+}
+
+// imp_5 reuse_spad
+bool Sram::check_hit(addr_type address, int buffer_id, bool reuse_input) { // spad에 올라온 input 중복 처리
+  if(reuse_input){
+    for(int id=0; id<2; ++id){
+      auto it = _cache_table[id].find(address);
+      if(it !=_cache_table[id].end()){
+        _cache_table[id].at(address).timestamp = _core_cycle;
+        return _cache_table[id].at(address).valid;   
+      }
+    }
+    return false;   // spad 둘 다 데이터 없으면 false
+  }
+  
+  if (_cache_table[buffer_id].find(address) != _cache_table[buffer_id].end()){ // layer 첫 시작 + c 바뀌는 reuse 못할 때, 처리
+    _cache_table[buffer_id].at(address).timestamp = _core_cycle;
+    return _cache_table[buffer_id].at(address).valid;
+  }
+  else return false;
 }
 
 bool Sram::check_full(int buffer_id) {
@@ -37,14 +57,33 @@ bool Sram::check_allocated(addr_type address, int buffer_id) {
 
 void Sram::cycle() {}
 
+void Sram::flush_weight(int buffer_id) {
+  auto& table = _cache_table[buffer_id]; 
+  size_t freed = 0;                       
+
+  for (auto it = table.begin(); it != table.end(); ) {
+      if (!it->second.is_input) {
+          freed += it->second.size;
+          it = table.erase(it);  
+      } else {
+          ++it; 
+      }
+  }
+
+   _current_size[buffer_id] = (_current_size[buffer_id] >= static_cast<int>(freed))
+                           ? (_current_size[buffer_id] - static_cast<int>(freed))
+                           : 0;
+                           
+  spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
+}
+
 void Sram::flush(int buffer_id) {
   _current_size[buffer_id] = 0;
   _cache_table[buffer_id].clear();
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
 }
 
-int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
-                    size_t count) {
+int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) { // imp_5 reuse_spad
   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
     if (!check_remain(allocated_size, buffer_id)) {
       print_all(buffer_id);
@@ -65,8 +104,21 @@ int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
   _cache_table[buffer_id][address] = SramEntry{.valid = false,
                                                .size = allocated_size,
                                                .remain_req_count = count,
+                                               .is_input = is_input,
                                                .timestamp = _core_cycle};
   return 1;
+}
+
+void Sram::fill(addr_type address, int buffer_id) {
+  assert(check_allocated(address, buffer_id));
+  assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
+         !_cache_table[buffer_id].at(address).valid);
+  _cache_table[buffer_id].at(address).remain_req_count--;
+  if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
+    _cache_table[buffer_id].at(address).valid = true;
+    is_valid[buffer_id] = true;
+    spdlog::trace("MAKE valid {} {}F", buffer_id, address);
+  }
 }
 
 void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32_t operand_id) {
@@ -90,20 +142,6 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32
     // spdlog::info("MAKE valid {}, {}, {}, input={}, cycle={}, cyc={}", core_id, buffer_id, address, operand_id==100?true:false, _core_cycle, _core_cycle+256);
   }
 }
-
-void Sram::fill(addr_type address, int buffer_id) {
-  assert(check_allocated(address, buffer_id));
-  assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
-         !_cache_table[buffer_id].at(address).valid);
-  _cache_table[buffer_id].at(address).remain_req_count--;
-  if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
-    _cache_table[buffer_id].at(address).valid = true;
-    is_valid[buffer_id] = true;
-    spdlog::trace("MAKE valid {} {}F", buffer_id, address);
-  }
-}
-
-
 
 void Sram::count_up(addr_type address, int buffer_id) {
   assert(check_allocated(address, buffer_id));
