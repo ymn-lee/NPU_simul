@@ -16,13 +16,16 @@ class Dram {
   virtual bool running() = 0;
   virtual void cycle() = 0;
   virtual bool is_full(uint32_t cid, MemoryAccess* request) = 0;
-  virtual bool is_available(uint32_t cid) = 0;
   virtual void push(uint32_t cid, MemoryAccess* request) = 0;
   virtual bool is_empty(uint32_t cid) = 0;
   virtual MemoryAccess* top(uint32_t cid) = 0;
   virtual void pop(uint32_t cid) = 0;
   uint32_t get_channel_id(MemoryAccess* request);
+  uint32_t _core_cycle=0;
   virtual void print_stat() {}
+  virtual void get_input_weight_req(uint32_t cid) {};
+  uint32_t layer_num;
+  uint32_t layer_num_check;
 
  protected:
   SimulationConfig _config;
@@ -36,11 +39,11 @@ class SimpleDram : public Dram {
   virtual bool running() override;
   virtual void cycle() override;
   virtual bool is_full(uint32_t cid, MemoryAccess* request) override;
-  virtual bool is_available(uint32_t cid) override;
   virtual void push(uint32_t cid, MemoryAccess* request) override;
   virtual bool is_empty(uint32_t cid) override;
   virtual MemoryAccess* top(uint32_t cid) override;
   virtual void pop(uint32_t cid) override;
+  virtual void get_input_weight_req(uint32_t cid) override;
 
  private:
   uint32_t _latency;
@@ -58,12 +61,13 @@ class DramRamulator : public Dram {
   virtual bool running() override;
   virtual void cycle() override;
   virtual bool is_full(uint32_t cid, MemoryAccess* request) override;
-  virtual bool is_available(uint32_t cid) override;
   virtual void push(uint32_t cid, MemoryAccess* request) override;
   virtual bool is_empty(uint32_t cid) override;
   virtual MemoryAccess* top(uint32_t cid) override;
   virtual void pop(uint32_t cid) override;
   virtual void print_stat() override;
+  virtual void get_input_weight_req(uint32_t cid) override;
+  
 
  private:
   std::unique_ptr<ram::Ramulator> _mem;
@@ -81,12 +85,12 @@ class DramRamulator2 : public Dram {
   virtual bool running() override;
   virtual void cycle() override;
   virtual bool is_full(uint32_t cid, MemoryAccess* request) override;
-  virtual bool is_available(uint32_t cid) override;
   virtual void push(uint32_t cid, MemoryAccess* request) override;
   virtual bool is_empty(uint32_t cid) override;
   virtual MemoryAccess* top(uint32_t cid) override;
   virtual void pop(uint32_t cid) override;
   virtual void print_stat() override;
+  void get_input_weight_req(uint32_t cid) override;
 
  private:
   std::vector<std::unique_ptr<NDPSim::Ramulator2>> _mem;

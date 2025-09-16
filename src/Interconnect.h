@@ -15,6 +15,8 @@ class Interconnect {
   virtual MemoryAccess* top(uint32_t nid) = 0;
   virtual void pop(uint32_t nid) = 0;
   virtual void print_stats() = 0;
+  uint32_t layer_num;
+  uint32_t layer_num_check;
 
  protected:
   SimulationConfig _config;
