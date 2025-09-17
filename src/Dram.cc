@@ -185,6 +185,9 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   addr_type start_addr = target_addr - (target_addr % atomic_bytes);
   assert(start_addr == target_addr);
   assert(request->size == atomic_bytes);
+  if(layer_num==layer_num_check){
+    spdlog::info("dram_req[{}]={}",cid, request->dram_address);
+  }
   target_addr = (target_addr >> _tx_ch_log2) << _tx_log2;
   NDPSim::mem_fetch* mf = new NDPSim::mem_fetch();
   mf->addr = target_addr;
