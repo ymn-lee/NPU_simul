@@ -33,7 +33,8 @@ bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
   bool result = false;
   if(_tiles.size() < 1){
     result = true;
-  }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
+  // }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
+  }else if((_tiles.size() < 2) && (core_run)){
     result = true;
   }
   return result;
@@ -76,11 +77,7 @@ void Core::issue(std::unique_ptr<Tile> op) {
   if (!op->accum || !(_current_layer_id == op->layer_id && _current_fused_op_id == op->fused_op_id)) {
     /* Accumeulate tile uses same acc spad buffer */
     acc_spad_id = (acc_spad_id + 1) % 2;
-    if(_spad.has_input[spad_id]){
-      _acc_spad.flush_weight(acc_spad_id);
-    }else{
-      _acc_spad.flush(acc_spad_id);
-    }
+    _acc_spad.flush(acc_spad_id);
   }
   // imp_5 ---------- spad_reuse
   spdlog::info("get_tile core=[{}, {}], cycle={}", _id, spad_id, _core_cycle);

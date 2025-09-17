@@ -317,7 +317,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
   turn_rr = true;
 
   /* MOVOUT */
-  if (tout_c_offset + mapping.tile_in_loop.C >= mapping.total_loop.C){
+  if ((tout_c_offset + mapping.tile_in_loop.C >= mapping.total_loop.C) || (mapping.tile_out_loop.C % 2 != 0)){
     int array_box = 0;
     int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
     while(Ms!=0 || Ns<mapping.tile_in_loop.N){
