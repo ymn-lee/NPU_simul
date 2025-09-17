@@ -62,7 +62,7 @@ void Core::issue(std::unique_ptr<Tile> op) {
     acc_spad_id = (acc_spad_id + 1) % 2;
     _acc_spad.flush(acc_spad_id);
   }
-  spdlog::info("get_tile core=[{}, {}], cycle={}", _id, spad_id, _core_cycle);
+  spdlog::info("get_tile core=[{}, {}], n={},c={},m={},cycle={}", _id, spad_id, op->batch, op->C, op->M, _core_cycle);
   _current_layer_id = op->layer_id;
   _current_fused_op_id = op->fused_op_id;
 
@@ -120,7 +120,7 @@ void Core::cycle() {
     if (inst->opcode == Opcode::MOVIN) {
       /*LD inst queue */
       if (inst->size == 0) {
-        spdlog::error("[Core {}] MVIN issue addr: {:x}, size: {:x}", _id, inst->dest_addr, inst->size);
+        spdlog::error("[Core {}] MVIN issue addr: {}, size: {:x}, N={}, C={}, M={}", _id, inst->dest_addr, inst->size, _tiles[i]->batch, _tiles[i]->C, _tiles[i]->M);
       }
       if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
           buffer->check_remain(inst->size, buffer_id)) {
@@ -185,7 +185,10 @@ bool Core::running() {
   return running;
 }
 
-bool Core::has_memory_request() { return _request_queue.size() > 0; }
+bool Core::has_memory_request() { 
+ int a = 4; 
+  return _request_queue.size() > 0; 
+}
 
 void Core::pop_memory_request() {
   assert(has_memory_request());
