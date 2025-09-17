@@ -136,8 +136,8 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
     is_valid[buffer_id] = true; // tile 내부의 inst가 순차적으로 요청되게 traffic 조절
-    if(operand_id == 100 && can_issue_second_tile>0) { 
-      can_issue_second_tile -- ; // 두 번째 input이 와야 두 번째 tile issue
+    if(operand_id == 101 && can_issue_second_tile>0) { 
+      can_issue_second_tile -- ; // 두 번째 weight가 와야 두 번째 tile issue
     }
     // spdlog::info("MAKE valid {}, {}, {}, input={}, cycle={}, cyc={}", core_id, buffer_id, address, operand_id==100?true:false, _core_cycle, _core_cycle+256);
   }
