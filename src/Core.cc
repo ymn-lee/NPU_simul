@@ -351,6 +351,7 @@ void Core::handle_ld_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = false,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id});
@@ -386,6 +387,7 @@ void Core::handle_st_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = true,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id};
