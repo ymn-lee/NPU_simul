@@ -107,6 +107,8 @@ void Core::cycle() {
       buffer = &_spad;
       buffer_id = _tiles[i]->spad_id;
     }
+    buffer->layer_num = layer_num;
+    buffer->layer_num_check = layer_num_check;
     bool issued = false;
     if (inst->opcode == Opcode::MOVIN) {
       /*LD inst queue */
@@ -349,6 +351,7 @@ void Core::handle_ld_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = false,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id});
@@ -384,6 +387,7 @@ void Core::handle_st_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = true,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id};

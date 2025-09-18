@@ -195,6 +195,7 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   mf->write = request->write;
   mf->request = true;
   mf->origin_data = request;
+  mf->operand_id = request->operand_id;
   _mem[cid]->push(mf);
 }
 
