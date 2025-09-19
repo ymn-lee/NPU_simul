@@ -79,7 +79,7 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
 
   uint32_t log_spad_size = log2(db_mats_in_spad);
   uint32_t log_acc_spad_size = log2(db_mats_in_acc_spad);
-  std::array<uint32_t,2> log_total_i_j = {log2(dim_I_padded/dim), log2(dim_J_padded/dim)};
+  std::array<uint32_t,2> log_total_i_j = {ceil(log2(ceil_div(dim_I_padded,dim))), ceil(log2(ceil_div(dim_J_padded,dim)))};
   std::array<uint32_t,2> log_inner_i_j = {0, 0};
   std::array<uint32_t,2> log_outer_i_j = log_total_i_j;
   std::array<uint32_t,2> inner_i_j = {0, 0};
@@ -107,7 +107,10 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
 
   tile_I = ceil_div(dim_I_padded,inner_I);
   tile_J = ceil_div(dim_J_padded,inner_J);
-  tile_K = ceil_div(dim_K_padded,inner_K);  
+  tile_K = ceil_div(dim_K_padded,inner_K);
+
+  
+
 
   /* create mapping entry */
   Mapping mapping;

@@ -288,7 +288,7 @@ void Core::finish_compute_pipeline(){
       _compute_pipeline.front()->finish_cycle <= _core_cycle) {
     std::unique_ptr<Instruction> inst = std::move(_compute_pipeline.front());
     if (inst->dest_addr >= ACCUM_SPAD_BASE)
-      _acc_spad.fill(inst->dest_addr, inst->spad_id);
+      _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
     else
       _spad.fill(inst->dest_addr, inst->spad_id);
     if(inst->last_inst) {
@@ -353,6 +353,7 @@ void Core::handle_ld_inst_queue() {
         spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
         std::exit(EXIT_FAILURE);
       }
+      // spdlog::info("[{}]core_ld : spad_addr={}",_id, front->dest_addr);
       for (addr_type addr : front->src_addrs) {
         assert(front->base_addr != GARBEGE_ADDR);
         MemoryAccess *access =
