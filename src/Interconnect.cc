@@ -96,13 +96,14 @@ bool Booksim2Interconnect::running() {
 void Booksim2Interconnect::cycle() {
   _booksim->layer_num = layer_num;
   _booksim->layer_num_check = layer_num_check;
+  _booksim->_core_cycle = _core_cycle;
   _booksim->run();
 }
 
 void Booksim2Interconnect::push(uint32_t src, uint32_t dest, MemoryAccess* request) {
   booksim2::Interconnect::Type type = get_booksim_type(request);
   uint32_t size = get_packet_size(request);
-  _booksim->push(request, 0, 0, size, type, src, dest);
+  _booksim->push(request, 0, request->dram_address, size, type, src, dest);
 }
 
 bool Booksim2Interconnect::is_full(uint32_t nid, MemoryAccess* request) {
@@ -118,6 +119,7 @@ MemoryAccess* Booksim2Interconnect::top(uint32_t nid) {
   assert(!is_empty(nid));
   return (MemoryAccess*) _booksim->top(nid, 0);
 }
+
 
 void Booksim2Interconnect::pop(uint32_t nid) {
   assert(!is_empty(nid));

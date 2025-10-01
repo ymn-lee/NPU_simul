@@ -16,3 +16,6 @@ vc_allocator = islip
 sw_allocator = islip
 alloc_iters = 1
 deadlock_warn_timeout = 10000
+
+watch_out = ./watch_output.log
+watch_packets = {29353}

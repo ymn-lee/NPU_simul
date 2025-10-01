@@ -74,13 +74,13 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id) {
   assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
          !_cache_table[buffer_id].at(address).valid);
   _cache_table[buffer_id].at(address).remain_req_count--;
-    if(layer_num==layer_num_check){
-      if(address >= ACCUM_SPAD_BASE){
-        spdlog::info("[{}]core exec valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
-      }else{
-        spdlog::info("[{}]core load valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
-      }
-    }
+    // if(layer_num==layer_num_check){
+    //   if(address >= ACCUM_SPAD_BASE){
+    //     spdlog::info("[{}]core exec valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
+    //   }else{
+    //     spdlog::info("[{}]core load valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
+    //   }
+    // }
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
     spdlog::trace("MAKE valid {} {}F", buffer_id, address);

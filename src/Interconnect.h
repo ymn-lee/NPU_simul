@@ -17,6 +17,7 @@ class Interconnect {
   virtual void print_stats() = 0;
   uint32_t layer_num;
   uint32_t layer_num_check;
+  uint32_t _core_cycle;
 
  protected:
   SimulationConfig _config;

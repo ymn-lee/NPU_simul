@@ -163,6 +163,7 @@ void DramRamulator2::cycle() {
     _mem[ch]->layer_num = layer_num;
     _mem[ch]->layer_num_check = layer_num_check;
     _mem[ch]->_dram_ch = ch;
+    _mem[ch]->_core_cycle = _core_cycle;
     _mem[ch]->cycle();
   }
 }
@@ -173,9 +174,9 @@ void DramRamulator2::get_input_weight_req(uint32_t cid){
   total = sizes[0];
   input_size = sizes[1];
   weight_size = sizes[2];
-  if(layer_num==layer_num_check){
-    spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
+  // }
 }
 
 bool DramRamulator2::is_available(uint32_t cid) {
@@ -197,9 +198,9 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   addr_type start_addr = target_addr - (target_addr % atomic_bytes);
   assert(start_addr == target_addr);
   assert(request->size == atomic_bytes);
-  if(layer_num==layer_num_check){
-    spdlog::info("dram_req[{}]={}",cid, request->dram_address);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("dram_req[{}]={}",cid, request->dram_address);
+  // }
   target_addr = (target_addr >> _tx_ch_log2) << _tx_log2;
   NDPSim::mem_fetch* mf = new NDPSim::mem_fetch();
   mf->addr = target_addr;
