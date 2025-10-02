@@ -169,9 +169,9 @@ void DramRamulator2::get_input_weight_req(uint32_t cid){
   total = sizes[0];
   input_size = sizes[1];
   weight_size = sizes[2];
-  if(layer_num==layer_num_check){
-    spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
+  // }
 }
 
 bool DramRamulator2::is_full(uint32_t cid, MemoryAccess* request) {
@@ -185,10 +185,13 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   addr_type start_addr = target_addr - (target_addr % atomic_bytes);
   assert(start_addr == target_addr);
   assert(request->size == atomic_bytes);
-  if(layer_num==layer_num_check){
-    spdlog::info("dram_req[{}]={}",cid, request->dram_address);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("dram_req[{}]={}",cid, request->dram_address);
+  // }
   target_addr = (target_addr >> _tx_ch_log2) << _tx_log2;
+  if(layer_num==layer_num_check){
+    spdlog::info("ipoly:{},{},{},{},{},{}",request->core_id, request->buffer_id, cid, request->dram_address, target_addr, _core_cycle);
+  }
   NDPSim::mem_fetch* mf = new NDPSim::mem_fetch();
   mf->addr = target_addr;
   mf->size = request->size;
