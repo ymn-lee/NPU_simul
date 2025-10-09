@@ -199,7 +199,7 @@ void Simulator::cycle() {
         if (!_icnt->is_empty(_n_cores + mem_id) &&
             !_dram->is_full(mem_id, _icnt->top(_n_cores + mem_id))) {
           if(_scheduler->layer_num == _scheduler->layer_num_check){
-            spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, front->operand_id,_core_cycles);
+            spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, _icnt->top(_n_cores + mem_id)->operand_id,_core_cycles);
           }
           _dram->push(mem_id, _icnt->top(_n_cores + mem_id));
           _icnt->pop(_n_cores + mem_id);
