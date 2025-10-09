@@ -43,8 +43,20 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
     std::exit(EXIT_FAILURE);
   }
   int core_id = -1; // starts from 0
+  uint32_t tile_chunk = 0;
+  uint32_t N_;
+  uint32_t M_;
+  uint32_t num_cores = _config.num_cores;
   for (uint32_t N = 0; N < mapping.tile_out_loop.N; N++) {
     for (uint32_t M = 0; M < mapping.tile_out_loop.M; M++) {
+      if(tile_chunk%_config.num_cores==0){
+        N_ = N;
+        M_ = M;
+        if((tile_chunk+_config.num_cores)>_config.num_cores){
+          num_cores = tile_chunk%_config.num_cores==0?_config.num_cores:tile_chunk%_config.num_cores;
+        }
+      }
+      tile_chunk += 1;
       for (uint32_t C = 0; C < mapping.tile_out_loop.C; C++) {
         if (C == 0) {
           core_id = (core_id + 1) % _config.num_cores;
@@ -53,10 +65,10 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
           .status = Tile::Status::INITIALIZED,
           .optype = "Gemm",
           .layer_id = _id,
-          .batch = N,
+          .batch = N_,
           .Q = 1,
           .P = 1,
-          .M = M,
+          .M = M_,
           .C = C,
           .S = 1,
           .R = 1,
@@ -64,7 +76,7 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
           .core_id = core_id
         });
         _tiles.push_back(std::move(tile));
-        initialize_instructions(_tiles.back().get(), mapping);
+        initialize_instructions(_tiles.back().get(), mapping, num_cores);
         if (!_tiles.back().get()->instructions.size())
           _tiles.pop_back();
       }
@@ -87,6 +99,253 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
   float theoretical_time = std::max(theoretical_compute_time, theoretical_mem_time);
   spdlog::info("[GemmWS]: Theoretical time(ms): {} Compute time: {} Memory time: {}",
                theoretical_time * 1e3, theoretical_compute_time * 1e3, theoretical_mem_time * 1e3);
+}
+
+void GemmWS::initialize_instructions(Tile* tile, Mapping mapping, uint32_t num_cores) {
+  uint32_t ch_rr=0;
+  uint32_t ch_per_core = _config.dram_channels/num_cores;
+  std::vector<int> tout_m_offset;
+  // std::vector<int> tout_n_offset;
+  tout_m_offset.resize(num_cores);
+  // tout_n_offset.resize(num_cores);
+  for(int core=0; core<num_cores; ++core) {
+    tout_m_offset[core] = (tile->M+core) * mapping.tile_in_loop.M;
+  //   tout_n_offset[core] = (tile->batch+core) * mapping.total_loop.N + tile->batch*mapping.tile_in_loop.N;
+  }
+  int tout_n_offset = tile->batch * mapping.tile_in_loop.N;
+  // int tout_m_offset = tile->M * mapping.tile_in_loop.M;
+  int tout_c_offset = tile->C * mapping.tile_in_loop.C;
+  int weight_elems_per_access = _config.dram_req_size * _config.dram_channels / _config.precision;
+  int elems_per_access = _config.dram_req_size / _config.precision;
+
+  addr_type act_sp_base_addr = SPAD_BASE;
+  addr_type weight_sp_base_addr = SPAD_BASE + mapping.tile_in_loop.N *
+                                                  mapping.tile_in_loop.C *
+                                                  _config.precision;
+
+
+  addr_type first_addr, second_addr, third_addr, output_addr;
+  first_addr = get_operand_addr(_INPUT_OPERAND);
+  second_addr = get_operand_addr(_INPUT_OPERAND+1);
+  third_addr = get_operand_addr(_INPUT_OPERAND+2);
+  output_addr = get_operand_addr(_OUTPUT_OPERAND);
+
+  int loop_size = _config.core_config[target_core].core_height;
+  int input_loop_size = _config.core_config[target_core].core_height *_config.num_cores;
+  int cloop_size = mapping.tile_in_loop.C;
+  for (int Ms = 0; Ms < mapping.tile_in_loop.M; Ms += loop_size) {
+    /* MOVIN BIAS */
+    if(!tile->accum && has_bias) { 
+      std::vector<addr_type> bias_addrs;
+      for(uint32_t M_offset_chunk:tout_m_offset){
+        int M_offset = M_offset_chunk + Ms;
+        int m_loop = M_offset + loop_size > mapping.total_loop.M
+                        ? mapping.total_loop.M - M_offset
+                        : loop_size;
+        if(m_loop > 0){
+          for (int iter_m = 0; iter_m < m_loop; iter_m+=weight_elems_per_access) {
+              int M = M_offset + iter_m;
+              if (M >= mapping.total_loop.M) continue;
+              addr_type bias_addr = third_addr + _config.align_address(M * _config.precision);
+              for(int ch=0; ch<ch_per_core; ++ch){
+                bias_addrs.push_back(re_mapping_ch(bias_addr, tile->core_id*ch_per_core+ch_rr));
+                ch_rr = (ch_rr+1)%ch_per_core;
+              }
+          }
+        }
+      }
+      tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+              .opcode = Opcode::MOVIN,
+              .dest_addr = ACCUM_SPAD_BASE + Ms * _config.precision,
+              .size = (uint32_t)bias_addrs.size(),
+              .src_addrs = std::vector<addr_type>(bias_addrs.begin(), bias_addrs.end()),
+              .operand_id = _INPUT_OPERAND + 2}));
+    }
+    for (int Cs = 0; Cs < mapping.tile_in_loop.C; Cs+= cloop_size) {
+      int C_offset = tout_c_offset + Cs;
+      int c_in_loop = C_offset + cloop_size > mapping.total_loop.C
+                      ? mapping.total_loop.C - C_offset
+                      : cloop_size;
+      /* MOVIN Weights */
+      addr_type weight_sp_addr =
+            weight_sp_base_addr +
+            (Ms * mapping.tile_in_loop.C + Cs) * _config.precision;
+      std::set<addr_type> weight_set;
+      for(uint32_t M_offset_chunk:tout_m_offset){
+        int M_offset = M_offset_chunk + Ms;
+        int m_loop = M_offset + loop_size > mapping.total_loop.M
+                        ? mapping.total_loop.M - M_offset
+                        : loop_size;
+        if(m_loop > 0){
+          for (int iter_m = 0; iter_m < m_loop; iter_m+=1) {
+            for (int iter_c = 0; iter_c < c_in_loop; iter_c+=weight_elems_per_access) {
+              int C = C_offset + iter_c;
+              int M = M_offset + iter_m;
+              std::vector<uint32_t> weight_shape_2d;
+              std::vector<uint32_t> index;
+              weight_shape_2d.resize(2);
+              index.resize(2);
+              weight_shape_2d[1] = _weight_shape[Cdim_w];
+              weight_shape_2d[0] = _weight_shape[Mdim]; 
+              index[1] = C;
+              index[0] = M;
+              addr_type weight_addr = second_addr + make_address(index, weight_shape_2d);
+              for(int ch=0; ch<ch_per_core; ++ch){
+                weight_set.insert(re_mapping_ch(weight_addr, tile->core_id*ch_per_core+ch_rr));
+                ch_rr = (ch_rr+1)%ch_per_core;
+              }
+            }
+          }
+        }
+      }
+      tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+          .opcode = Opcode::MOVIN,
+          .dest_addr = weight_sp_addr,
+          .size = (uint32_t)weight_set.size(),
+          .src_addrs = std::vector<addr_type>(weight_set.begin(), weight_set.end()),
+          .operand_id = _INPUT_OPERAND + 1,
+          .tile_m = mapping.tile_in_loop.M,
+          .tile_k = mapping.tile_in_loop.C}));
+
+      for (int Ns = 0; Ns < mapping.tile_in_loop.N; Ns += input_loop_size) {
+        addr_type act_sp_addr =
+            act_sp_base_addr +
+            (Ns * mapping.tile_in_loop.C + Cs) * _config.precision;
+        addr_type out_sp_addr =
+            ACCUM_SPAD_BASE +
+            (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
+
+        /* MOVIN Activation */
+        if (Ms == 0) {
+          std::set<addr_type> input_set;
+          // for(uint32_t N_offset_chunk:tout_n_offset){
+          int N_offset = tout_n_offset + Ns;
+          int n_loop = N_offset + input_loop_size > mapping.total_loop.N
+                            ? mapping.total_loop.N - N_offset
+                            : input_loop_size;
+          if(n_loop > 0){
+            for (int iter_n = 0; iter_n < n_loop; iter_n++) {
+              for (int iter_c = 0; iter_c < c_in_loop; iter_c+=weight_elems_per_access) {
+                uint32_t N = N_offset + iter_n;
+                uint32_t C = C_offset + iter_c;
+                std::vector<uint32_t> index;
+                if (_input_shape.size()==3)
+                  index = {N/_input_shape.at(1), N%_input_shape.at(1), C};
+                else
+                  index = {N, C};
+                addr_type input_addr = first_addr + make_address(index, _input_shape);
+                for(int ch=0; ch<ch_per_core; ++ch){
+                  input_set.insert(re_mapping_ch(input_addr, tile->core_id*ch_per_core+ch_rr));
+                  ch_rr = (ch_rr+1)%ch_per_core;
+                }
+              }
+            }
+          }
+          // }
+          tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+              .opcode = Opcode::MOVIN,
+              .dest_addr = act_sp_addr,
+              .size = (uint32_t)input_set.size(),
+              .src_addrs = std::vector<addr_type>(input_set.begin(), input_set.end()),
+              .operand_id = _INPUT_OPERAND,
+              .tile_k = mapping.tile_in_loop.C,
+              .tile_n = mapping.tile_in_loop.N}));
+        }
+      }
+    }
+  }
+  /* Compute */
+  for(int Ms = 0; Ms < mapping.tile_in_loop.M; Ms += loop_size) {
+    int M_offset = tout_m_offset[0] + Ms;
+    int m_loop = M_offset + loop_size > mapping.total_loop.M
+                     ? mapping.total_loop.M - M_offset
+                     : loop_size;
+    if(m_loop > 0){
+      for (int Cs = 0; Cs < mapping.tile_in_loop.C; Cs+= cloop_size) {
+        int C_offset = tout_c_offset + Cs;
+        int c_in_loop = C_offset + cloop_size > mapping.total_loop.C
+                        ? mapping.total_loop.C - C_offset
+                        : cloop_size;
+        addr_type weight_sp_addr =
+              weight_sp_base_addr +
+              (Ms * mapping.tile_in_loop.C + Cs) * _config.precision;
+        for (int Ns = 0; Ns < mapping.tile_in_loop.N; Ns += input_loop_size) {
+          // for(uint32_t N_offset_chunk:tout_n_offset){
+            int N_offset = tout_n_offset + Ns;
+            int n_loop = N_offset + loop_size > mapping.total_loop.N
+                              ? mapping.total_loop.N - N_offset
+                              : loop_size;
+            if(n_loop > 0){
+              addr_type act_sp_addr =
+                  act_sp_base_addr +
+                  (Ns * mapping.tile_in_loop.C + Cs) * _config.precision;
+              addr_type out_sp_addr =
+                  ACCUM_SPAD_BASE +
+                  (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
+              for(int c_iter = 0; c_iter < c_in_loop; c_iter+=_config.core_config[target_core].core_height) {
+                int c_iter_size = c_in_loop - c_iter > _config.core_config[target_core].core_height ? _config.core_config[target_core].core_height : c_in_loop - c_iter;
+                tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+                    .opcode = Opcode::GEMM_PRELOAD,
+                    .dest_addr = out_sp_addr,
+                    .size = (uint32_t)n_loop,
+                    .compute_size = (uint32_t)n_loop,
+                    .src_addrs =
+                        std::vector<addr_type>{act_sp_addr, weight_sp_addr},
+                    .tile_m = static_cast<unsigned int>(m_loop),
+                    .tile_k = static_cast<unsigned int>(c_iter_size),
+                    .tile_n = static_cast<unsigned int>(n_loop)}));
+              }
+            }
+          }
+        // }
+      }
+    }
+  }
+
+  /* MOVOUT */
+  if (tout_c_offset + mapping.tile_in_loop.C >= mapping.total_loop.C){
+    for (int Ms = 0; Ms < mapping.tile_in_loop.M; Ms += loop_size) {
+      int M_offset = tout_m_offset[0] + Ms;
+      int m_loop = M_offset + loop_size > mapping.total_loop.M
+                      ? mapping.total_loop.M - M_offset
+                      : loop_size;
+      if(m_loop <= 0) break;
+      for (int Ns = 0; Ns < mapping.tile_in_loop.N; Ns += input_loop_size) {
+        int N_offset = tout_n_offset + Ns;
+        int n_loop = N_offset + loop_size > mapping.total_loop.N
+                          ? mapping.total_loop.N - N_offset
+                          : loop_size;
+        if(n_loop <= 0) break;
+        addr_type out_sp_addr =
+            ACCUM_SPAD_BASE +
+            (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
+        std::set<addr_type> output_set;
+        for (int iter_n = 0; iter_n < n_loop; iter_n++) {
+          for (int iter_m = 0; iter_m < m_loop; iter_m+=elems_per_access) {
+            uint32_t N = N_offset + iter_n;
+            uint32_t M = M_offset + iter_m;
+            std::vector<uint32_t> index;
+            if (_output_shape.size()==3)
+                index = {N/_output_shape.at(1), N%_output_shape.at(1), M};
+              else
+                index = {N, M};
+            addr_type outout_addr = output_addr + make_address(index, _output_shape);
+            for(int ch=0; ch<ch_per_core; ++ch){
+              output_set.insert(re_mapping_ch(outout_addr, tile->core_id*ch_per_core+ch_rr));
+              ch_rr = (ch_rr+1)%ch_per_core;
+            }
+          }
+        }
+          /*MOVOUT result at the last loop*/
+        tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+            .opcode = Opcode::MOVOUT,
+            .dest_addr = out_sp_addr,
+            .size = (uint32_t)output_set.size(),
+            .src_addrs = std::vector<addr_type>(output_set.begin(), output_set.end()),
+            .operand_id = _OUTPUT_OPERAND}));
+      }
+    }
+  }
 }
 
 void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {

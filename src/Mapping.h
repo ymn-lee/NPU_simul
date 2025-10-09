@@ -63,6 +63,7 @@ struct Mapping {
   LoopCounts total_loop;
   LoopCounts tile_in_loop;
   LoopCounts tile_out_loop;
+  uint32_t tile_chunk;
   uint32_t spatial_M = 0;
   uint32_t spatial_P = 0;
   uint32_t spatial_Q = 0;
