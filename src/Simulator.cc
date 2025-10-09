@@ -175,6 +175,9 @@ void Simulator::cycle() {
           MemoryAccess *front = _cores[core_id]->top_memory_request();
           front->core_id = core_id;
           if (!_icnt->is_full(core_id, front)) {
+            if(_scheduler->layer_num == _scheduler->layer_num_check){
+              spdlog::info("c2i,core={},buffer_id={},ch={},addr={},op={},cycle={}",core_id, front->buffer_id, get_dest_node(front)-4, front->dram_address, front->operand_id, _core_cycles);
+            }
             _icnt->push(core_id, get_dest_node(front), front);
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
@@ -195,6 +198,9 @@ void Simulator::cycle() {
         // ICNT to memory
         if (!_icnt->is_empty(_n_cores + mem_id) &&
             !_dram->is_full(mem_id, _icnt->top(_n_cores + mem_id))) {
+          if(_scheduler->layer_num == _scheduler->layer_num_check){
+            spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, front->operand_id,_core_cycles);
+          }
           _dram->push(mem_id, _icnt->top(_n_cores + mem_id));
           _icnt->pop(_n_cores + mem_id);
           _nr_to_mem++;
