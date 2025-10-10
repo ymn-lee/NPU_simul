@@ -272,7 +272,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping, uint32_t num_c
         for (int Ns = 0; Ns < mapping.tile_in_loop.N; Ns += input_loop_size) {
           // for(uint32_t N_offset_chunk:tout_n_offset){
             int N_offset = tout_n_offset + Ns;
-            int n_loop = N_offset + loop_size > mapping.total_loop.N
+            int n_loop = N_offset + input_loop_size > mapping.total_loop.N
                               ? mapping.total_loop.N - N_offset
                               : loop_size;
             if(n_loop > 0){
@@ -305,34 +305,36 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping, uint32_t num_c
   /* MOVOUT */
   if (tout_c_offset + mapping.tile_in_loop.C >= mapping.total_loop.C){
     for (int Ms = 0; Ms < mapping.tile_in_loop.M; Ms += loop_size) {
-      int M_offset = tout_m_offset[0] + Ms;
-      int m_loop = M_offset + loop_size > mapping.total_loop.M
-                      ? mapping.total_loop.M - M_offset
-                      : loop_size;
-      if(m_loop <= 0) break;
       for (int Ns = 0; Ns < mapping.tile_in_loop.N; Ns += input_loop_size) {
+        addr_type out_sp_addr = ACCUM_SPAD_BASE + (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
+        std::set<addr_type> output_set;
         int N_offset = tout_n_offset + Ns;
         int n_loop = N_offset + loop_size > mapping.total_loop.N
                           ? mapping.total_loop.N - N_offset
                           : loop_size;
-        if(n_loop <= 0) break;
-        addr_type out_sp_addr =
-            ACCUM_SPAD_BASE +
-            (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
-        std::set<addr_type> output_set;
-        for (int iter_n = 0; iter_n < n_loop; iter_n++) {
-          for (int iter_m = 0; iter_m < m_loop; iter_m+=elems_per_access) {
-            uint32_t N = N_offset + iter_n;
-            uint32_t M = M_offset + iter_m;
-            std::vector<uint32_t> index;
-            if (_output_shape.size()==3)
-                index = {N/_output_shape.at(1), N%_output_shape.at(1), M};
-              else
-                index = {N, M};
-            addr_type outout_addr = output_addr + make_address(index, _output_shape);
-            for(int ch=0; ch<ch_per_core; ++ch){
-              output_set.insert(re_mapping_ch(outout_addr, tile->core_id*ch_per_core+ch_rr));
-              ch_rr = (ch_rr+1)%ch_per_core;
+        if(n_loop > 0){ 
+          for(uint32_t M_offset_chunk:tout_m_offset){
+            int M_offset = M_offset_chunk + Ms;
+            int m_loop = M_offset + loop_size > mapping.total_loop.M
+                            ? mapping.total_loop.M - M_offset
+                            : loop_size;
+            if(m_loop > 0){ 
+              for (int iter_n = 0; iter_n < n_loop; iter_n=iter_n+2) {
+                for (int iter_m = 0; iter_m < m_loop; iter_m+=elems_per_access) {
+                  uint32_t N = N_offset + iter_n;
+                  uint32_t M = M_offset + iter_m;
+                  std::vector<uint32_t> index;
+                  if (_output_shape.size()==3)
+                      index = {N/_output_shape.at(1), N%_output_shape.at(1), M};
+                    else
+                      index = {N, M};
+                  addr_type outout_addr = output_addr + make_address(index, _output_shape);
+                  for(int ch=0; ch<ch_per_core; ++ch){
+                    output_set.insert(re_mapping_ch(outout_addr, tile->core_id*ch_per_core+ch_rr));
+                    ch_rr = (ch_rr+1)%ch_per_core;
+                  }
+                }
+              }
             }
           }
         }
