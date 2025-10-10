@@ -29,14 +29,18 @@ Core::Core(uint32_t id, SimulationConfig config)
   _running_layer = -1;
 }
 
-bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
-  bool result = false;
-  if(_tiles.size() < 1){
-    result = true;
-  }else if((_tiles.size() < 2) && (core_run)){
-    result = true;
-  }
-  return result;
+// bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
+//   bool result = false;
+//   if(_tiles.size() < 1){
+//     result = true;
+//   }else if((_tiles.size() < 2) && (core_run)){
+//     result = true;
+//   }
+//   return result;
+// }
+
+bool Core::can_issue(bool is_accum_tile) {  // reference
+  return _tiles.size() < 2;  // double buffer
 }
 
 void Core::issue(std::unique_ptr<Tile> op) {
@@ -330,7 +334,8 @@ void Core::finish_vector_pipeline() {
 }
 
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  // if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  if (!_ld_inst_queue.empty()) {  // reference
     std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
     if (front->opcode == Opcode::MOVIN) {
       bool prefetched = false;
