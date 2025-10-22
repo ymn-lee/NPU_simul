@@ -159,6 +159,7 @@ void DramRamulator2::cycle() {
     _mem[ch]->layer_num = layer_num;
     _mem[ch]->layer_num_check = layer_num_check;
     _mem[ch]->_dram_ch = ch;
+    _mem[ch]->_core_cycle = _core_cycle;
     _mem[ch]->cycle();
   }
 }
@@ -189,9 +190,9 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   //   spdlog::info("dram_req[{}]={}",cid, request->dram_address);
   // }
   target_addr = (target_addr >> _tx_ch_log2) << _tx_log2;
-  if(layer_num==layer_num_check){
-    spdlog::info("ipoly:{},{},{},{},{},{}",request->core_id, request->buffer_id, cid, request->dram_address, target_addr, _core_cycle);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("ipoly:{},{},{},{},{},{}",request->core_id, request->buffer_id, cid, request->dram_address, target_addr, _core_cycle);
+  // }
   NDPSim::mem_fetch* mf = new NDPSim::mem_fetch();
   mf->addr = target_addr;
   mf->size = request->size;
