@@ -37,14 +37,33 @@ bool Sram::check_allocated(addr_type address, int buffer_id) {
 
 void Sram::cycle() {}
 
+void Sram::flush_weight(int buffer_id) {
+  auto& table = _cache_table[buffer_id]; 
+  size_t freed = 0;                       
+
+  for (auto it = table.begin(); it != table.end(); ) {
+      if (!it->second.is_input) {
+          freed += it->second.size;
+          it = table.erase(it);  
+      } else {
+          ++it; 
+      }
+  }
+
+   _current_size[buffer_id] = (_current_size[buffer_id] >= static_cast<int>(freed))
+                           ? (_current_size[buffer_id] - static_cast<int>(freed))
+                           : 0;
+                           
+  spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
+}
+
 void Sram::flush(int buffer_id) {
   _current_size[buffer_id] = 0;
   _cache_table[buffer_id].clear();
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
 }
 
-int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
-                    size_t count) {
+int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) {
   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
     if (!check_remain(allocated_size, buffer_id)) {
       print_all(buffer_id);
@@ -65,6 +84,7 @@ int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
   _cache_table[buffer_id][address] = SramEntry{.valid = false,
                                                .size = allocated_size,
                                                .remain_req_count = count,
+                                               .is_input = is_input,
                                                .timestamp = _core_cycle};
   return 1;
 }

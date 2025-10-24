@@ -52,15 +52,26 @@ void Core::issue(std::unique_ptr<Tile> op) {
              .sram_writes = 0};
   int spad_id = 0;
   int acc_spad_id = 0;
+  bool reuse_input = false;
 
   if (_tiles.size() == 1) {
     spad_id = _tiles[0]->spad_id;
     acc_spad_id = _tiles[0]->accum_spad_id;
+    if((_tiles[0]->batch == op->batch) &&(_tiles[0]->C/2 == op->C/2) && (_tiles[0]->is_gemm)){
+      reuse_input = true;
+    }
   }
 
   /* Double buffer */
   spad_id = (spad_id + 1) % 2;
-  _spad.flush(spad_id);
+  // imp_5 ---------- spad_reuse
+  // check reusable_input
+  _spad.has_input[spad_id] = reuse_input;
+  if(_spad.has_input[spad_id]){
+    _spad.flush_weight(spad_id);
+  }else{
+    _spad.flush(spad_id);
+  }
   if (!op->accum || !(_current_layer_id == op->layer_id && _current_fused_op_id == op->fused_op_id)) {
     /* Accumeulate tile uses same acc spad buffer */
     acc_spad_id = (acc_spad_id + 1) % 2;
@@ -369,13 +380,15 @@ void Core::handle_ld_inst_queue() {
         buffer_id = front->spad_id;
         buffer->is_valid[buffer_id]=false;
       }
+      bool is_input = front->operand_id==100 ? true : false;
+
       if (front->size==0) {
         spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
       }
       if(front->dest_addr==536873696){
           int a = 1;
         }
-      int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size);
+      int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
       if (!ret) {
         spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
         spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
