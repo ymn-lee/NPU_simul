@@ -1,4 +1,5 @@
 #include "Mapping.h"
+#include "Common.h"
 
 #include <fstream>
 #include <sstream>
@@ -61,7 +62,7 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   dim_J = key.M;
   dim_K = key.C;
 
-  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim;
+  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim; // prefill
   const uint32_t dim_J_padded = (dim_J / dim + (dim_J % dim != 0 )) * dim;
   const uint32_t dim_K_padded = (dim_K / dim + (dim_K % dim != 0 )) * dim;
 
@@ -86,31 +87,61 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   uint32_t inner_c = dim_K_padded/dim;
   uint32_t turn = 0;
 
-  // acc 최적화 -  tile 개수가 4개 미만일 때 구현도 고려해야함
-  while((log_inner_i_j[0]+log_inner_i_j[1] < log_acc_spad_size) && (log_outer_i_j[0]+log_outer_i_j[1] > 2)){
-    if(log_outer_i_j[turn] != 0){
-      log_inner_i_j[turn] += 1;
-      log_outer_i_j[turn] -= 1;
+  // acc 최적화 -  prefill
+  if(dim_I > 1<<5){
+    while((log_inner_i_j[0]+log_inner_i_j[1] < log_acc_spad_size) && (log_outer_i_j[0]+log_outer_i_j[1] > 2)){
+      if(log_outer_i_j[turn] != 0){
+        log_inner_i_j[turn] += 1;
+        log_outer_i_j[turn] -= 1;
+      }
+      turn = (turn+1)%2;
     }
-    turn = (turn+1)%2;
+    inner_i_j = {1u<<log_inner_i_j[0],1u<<log_inner_i_j[1]};
+
+    // C 최적화
+    while((inner_i_j[0]+inner_i_j[1])*inner_c>db_mats_in_spad){
+      inner_c /= 2;
+    }
+    inner_I = inner_i_j[0]*dim;
+    inner_J = inner_i_j[1]*dim;
+    inner_K = inner_c*dim;
+
+    tile_I = ceil_div(dim_I_padded,inner_I);
+    tile_J = ceil_div(dim_J_padded,inner_J);
+    tile_K = ceil_div(dim_K_padded,inner_K);
+  }else{  // acc 최적화 decoding
+    inner_I = dim_I;
+    inner_J = (dim - inner_I)*2;
+    inner_K = dim;
+    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / 2 && inner_J <= dim_J_padded){
+      inner_J *= 2;
+    }
+    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / 2 && inner_K <= dim_K_padded){
+      inner_K *= 2;
+    }
+
+    tile_I = ceil_div(inner_I,inner_I);
+    tile_J = ceil_div(dim_J_padded,inner_J);
+    tile_K = ceil_div(dim_K_padded,inner_K);
   }
-  inner_i_j = {1u<<log_inner_i_j[0],1u<<log_inner_i_j[1]};
 
-  // C 최적화
-  while((inner_i_j[0]+inner_i_j[1])*inner_c>db_mats_in_spad){
-    inner_c /= 2;
+  // tile을 core 배수로
+  if((tile_I*tile_J)%_config.num_cores!=0){
+    if(tile_I>tile_J){
+      tile_I += _config.num_cores - (tile_I%_config.num_cores);
+    }else{
+      tile_J += _config.num_cores - (tile_J%_config.num_cores);
+    }
   }
 
-  inner_I = inner_i_j[0]*dim;
-  inner_J = inner_i_j[1]*dim;
-  inner_K = inner_c*dim;
+  inner_I = ceil_div(dim_I_padded, tile_I);
+  inner_J = ceil_div(dim_J_padded, tile_J);
 
-  tile_I = ceil_div(dim_I_padded,inner_I);
-  tile_J = ceil_div(dim_J_padded,inner_J);
-  tile_K = ceil_div(dim_K_padded,inner_K);
-
-  
-
+  uint32_t temp_inner_I = dim_I > 1<<5 ? inner_I : dim_I;
+  while((temp_inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && tile_K>1){
+    inner_K *= 2;
+    tile_K /= 2;
+  }
 
   /* create mapping entry */
   Mapping mapping;

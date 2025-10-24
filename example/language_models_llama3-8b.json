@@ -1,7 +1,7 @@
 {
   "models": [
      {
-         "name": "llama3-8b",
+         "name": "opt-125m",
          "trace_file" : "input.csv",
          "scheduler" : "simple",
          "scheduler_config": {

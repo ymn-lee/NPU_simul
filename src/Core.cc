@@ -204,9 +204,15 @@ void Core::push_memory_response(MemoryAccess *response) {
   if (response->write) {
     _waiting_write_reqs--;
   } else if (response->spad_address >= ACCUM_SPAD_BASE) {
+    if(response->spad_address==536871840){
+      int a=90;
+    }
     _acc_spad.fill(response->spad_address, response->dram_address, response->buffer_id, response->operand_id);
   } else {
     assert(_spad.check_allocated(response->spad_address, response->buffer_id));
+    if(response->spad_address==536871840){
+      int a=90;
+    }
     _spad.fill(response->spad_address, response->dram_address, response->buffer_id, response->operand_id);
   }
   delete response;
@@ -291,10 +297,18 @@ void Core::finish_compute_pipeline(){
   if (!_compute_pipeline.empty() &&
       _compute_pipeline.front()->finish_cycle <= _core_cycle) {
     std::unique_ptr<Instruction> inst = std::move(_compute_pipeline.front());
-    if (inst->dest_addr >= ACCUM_SPAD_BASE)
+    if (inst->dest_addr >= ACCUM_SPAD_BASE){
+      if(inst->dest_addr==536871840){
+        int a=90;
+      }
       _acc_spad.fill(inst->dest_addr, inst->accum_spad_id);
-    else
+    }
+    else{
+      if(inst->dest_addr==536871840){
+        int a=90;
+      }
       _spad.fill(inst->dest_addr, inst->spad_id);
+    }
     if(inst->last_inst) {
       spdlog::trace("Finished last GEMM {}", inst->spad_id);
       inst->my_tile->inst_finished = true;
@@ -317,12 +331,18 @@ void Core::finish_vector_pipeline() {
         spdlog::error("Vector pipeline -> accum");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
       }
+      if(inst->dest_addr==536871840){
+        int a=90;
+      }
       _acc_spad.fill(inst->dest_addr,  inst->accum_spad_id);
     }
     else {
       if(!_spad.check_allocated(inst->dest_addr, inst->accum_spad_id)) {
         spdlog::error("Vector pipeline -> spad");
         spdlog::error("Destination not allocated {}", inst->dest_addr);
+      }
+      if(inst->dest_addr==536871840){
+        int a=90;
       }
       _spad.fill(inst->dest_addr,  inst->spad_id);
     }
@@ -352,6 +372,9 @@ void Core::handle_ld_inst_queue() {
       if (front->size==0) {
         spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
       }
+      if(front->dest_addr==536873696){
+          int a = 1;
+        }
       int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size);
       if (!ret) {
         spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
@@ -360,6 +383,15 @@ void Core::handle_ld_inst_queue() {
       }
       // spdlog::info("[{}]core_ld : spad_addr={}",_id, front->dest_addr);
       for (addr_type addr : front->src_addrs) {
+        if(addr==536873696){
+          int a = 1;
+        }
+        if(addr + front->base_addr==536873696){
+          int a = 1;
+        }
+        if(front->dest_addr==536873696){
+          int a = 1;
+        }
         assert(front->base_addr != GARBEGE_ADDR);
         MemoryAccess *access =
             new MemoryAccess({.id = generate_mem_access_id(),
