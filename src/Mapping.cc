@@ -109,7 +109,26 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   tile_J = ceil_div(dim_J_padded,inner_J);
   tile_K = ceil_div(dim_K_padded,inner_K);
 
-  
+  // tile을 core 배수로
+  if((tile_I*tile_J)%_config.num_cores!=0){
+    if(tile_I>tile_J){
+      tile_I += _config.num_cores - (tile_I%_config.num_cores);
+    }else{
+      tile_J += _config.num_cores - (tile_J%_config.num_cores);
+    }
+  }
+  inner_I = ceil_div(dim_I_padded, tile_I);
+  inner_J = ceil_div(dim_J_padded, tile_J);
+
+  while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && tile_K>1){
+    if(dim_K_padded<inner_K*2){
+      inner_K = dim_K_padded;
+      tile_K = 1;
+    }else{
+      inner_K *= 2;
+      tile_K /= 2;
+    }
+  }
 
 
   /* create mapping entry */
