@@ -596,7 +596,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
           Ms -= loop_size;
         }
       }else{                            // M이 큰 경우
-        if(Ns==array_box-loop_size){
+        if(Ns>=array_box-loop_size){
           Ns = 0;
           Ms += loop_size;
         }else{
@@ -671,7 +671,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
         }
       }
 
-      if(array_box == array_min_box){
+      if(array_box >= array_min_box){
         if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){  // N이 큰 경우
           if(Ms==0){
             Ns += loop_size;
@@ -680,7 +680,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
             Ms -= loop_size;
           }
         }else{                            // M이 큰 경우
-          if(Ns==array_box-loop_size){
+          if(Ns>=array_box-loop_size){
             Ns = 0;
             Ms += loop_size;
           }else{
@@ -692,7 +692,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
           array_box += loop_size;
           Ms = array_box;
           Ns = 0;
-          if(array_box == array_min_box){
+          if(array_box >= array_min_box){
             if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){
               Ns = array_box;
               Ms = array_box - loop_size;
