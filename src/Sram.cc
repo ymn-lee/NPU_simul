@@ -53,6 +53,12 @@ void Sram::flush_weight(int buffer_id) {
    _current_size[buffer_id] = (_current_size[buffer_id] >= static_cast<int>(freed))
                            ? (_current_size[buffer_id] - static_cast<int>(freed))
                            : 0;
+  
+  spdlog::info("{}, {}SRAM[{}] Flush complete. Current size: {} bytes, Remaining entries: {}",
+      core_id, _accum ? "Acc-" : "",
+      buffer_id,
+      _current_size[buffer_id],
+      table.size());
                            
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
 }
@@ -61,6 +67,7 @@ void Sram::flush(int buffer_id) {
   _current_size[buffer_id] = 0;
   _cache_table[buffer_id].clear();
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
+  spdlog::info("{}, {}SRAM[{}] Flush", core_id, _accum? "Acc-": "", buffer_id);
 }
 
 int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) {
