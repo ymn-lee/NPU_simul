@@ -45,34 +45,39 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
   int core_id = -1; // starts from 0
   // spdlog::info("gen_tile");
   for (uint32_t N = 0; N < mapping.tile_out_loop.N; N++) {
-    for (uint32_t M = 0; M < mapping.tile_out_loop.M; M++) {
-      for (uint32_t C = 0; C < mapping.tile_out_loop.C; C++) {
-        if (C == 0) {
-          core_id = (core_id + 1) % _config.num_cores;
+    for(uint32_t skipped_C = 0; skipped_C < mapping.tile_out_loop.C; skipped_C+=2){
+      for (uint32_t M = 0; M < mapping.tile_out_loop.M; M++) {
+        for (uint32_t in_C = 0; in_C < 2; in_C++) {
+          uint32_t C = skipped_C + in_C;
+          if(C >= mapping.tile_out_loop.C) continue;
+          if (C == 0) {
+            core_id = (core_id + 1) % _config.num_cores;
+          }
+          std::unique_ptr<Tile> tile = std::make_unique<Tile>(Tile{
+            .status = Tile::Status::INITIALIZED,
+            .optype = "Gemm",
+            .layer_id = _id,
+            .batch = N,
+            .Q = 1,
+            .P = 1,
+            .M = M,
+            .C = C,
+            .S = 1,
+            .R = 1,
+            .accum = in_C != 0, 
+            .core_id = core_id
+          });
+          tile->is_gemm = true;
+          _tiles.push_back(std::move(tile));
+          if(mapping.total_loop.N>16){
+            initialize_instructions(_tiles.back().get(), mapping);
+          }else{
+            initialize_decoding_instructions(_tiles.back().get(), mapping);
+          }
+          
+          if (!_tiles.back().get()->instructions.size())
+            _tiles.pop_back();
         }
-        std::unique_ptr<Tile> tile = std::make_unique<Tile>(Tile{
-          .status = Tile::Status::INITIALIZED,
-          .optype = "Gemm",
-          .layer_id = _id,
-          .batch = N,
-          .Q = 1,
-          .P = 1,
-          .M = M,
-          .C = C,
-          .S = 1,
-          .R = 1,
-          .accum = C != 0,
-          .core_id = core_id
-        });
-        _tiles.push_back(std::move(tile));
-        if(mapping.total_loop.N>16){
-          initialize_instructions(_tiles.back().get(), mapping);
-        }else{
-          initialize_decoding_instructions(_tiles.back().get(), mapping);
-        }
-        
-        if (!_tiles.back().get()->instructions.size())
-          _tiles.pop_back();
       }
     }
   }

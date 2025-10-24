@@ -137,7 +137,11 @@ void Core::cycle() {
       if (inst->size == 0) {
         spdlog::error("[Core {}] MVIN issue addr: {}, size: {:x}, N={}, C={}, M={}", _id, inst->dest_addr, inst->size, _tiles[i]->batch, _tiles[i]->C, _tiles[i]->M);
       }
-      if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
+      // reuse input
+      if(_spad.has_input[buffer_id] && inst->operand_id==100){
+        issued = true;
+      }
+      else if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
           buffer->check_remain(inst->size, buffer_id)) {
         _ld_inst_queue.push(std::move(inst));
         issued = true;
