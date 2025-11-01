@@ -70,6 +70,7 @@ void Core::issue(std::unique_ptr<Tile> op) {
   if (_running_layer != op->layer_id) {
     _running_layer = op->layer_id;
   }
+  spdlog::info("get_tile, cycle={}",_core_cycle);
   _tiles.push_back(std::move(op));
 }
 
@@ -160,9 +161,9 @@ void Core::cycle() {
       break;
     }
   }
-  // if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
-  //   print_current_stats();
-  // }
+  if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
+    print_current_stats();
+  }
 }
 
 bool Core::running() {
@@ -320,7 +321,8 @@ void Core::finish_vector_pipeline() {
 }
 
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  // if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  if (!_ld_inst_queue.empty()) {  // reference
     std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
     if (front->opcode == Opcode::MOVIN) {
       bool prefetched = false;
@@ -352,6 +354,7 @@ void Core::handle_ld_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = false,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id});
@@ -387,6 +390,7 @@ void Core::handle_st_inst_queue() {
                               .size = _config.dram_req_size,
                               .write = true,
                               .request = true,
+                              .operand_id = front->operand_id,
                               .core_id = _id,
                               .start_cycle = _core_cycle,
                               .buffer_id = buffer_id};

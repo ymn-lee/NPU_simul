@@ -163,6 +163,7 @@ void DramRamulator2::cycle() {
     _mem[ch]->layer_num = layer_num;
     _mem[ch]->layer_num_check = layer_num_check;
     _mem[ch]->_dram_ch = ch;
+    _mem[ch]->_core_cycle = _core_cycle;
     _mem[ch]->cycle();
   }
 }
@@ -203,7 +204,9 @@ void DramRamulator2::push(uint32_t cid, MemoryAccess* request) {
   mf->size = request->size;
   mf->write = request->write;
   mf->request = true;
+  mf->origin_addr = request->dram_address;
   mf->origin_data = request;
+  mf->operand_id = request->operand_id;
   _mem[cid]->push(mf);
 }
 
