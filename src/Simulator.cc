@@ -87,8 +87,11 @@ Simulator::Simulator(SimulationConfig config, bool language_mode)
 
   // MMScheduler
   request_queue_per_ch.resize(_config.dram_channels);
+  active_row_map.resize(_config.dram_channels);
+  active_row_order.resize(_config.dram_channels);
   // request_buffer_per_ch.resize(_config.dram_channels);
   mm_rr.resize(_config.dram_channels, 0);
+  mm_flush.resize(_config.dram_channels, false);
 
   //Configure Hardware Scheduler
   
@@ -218,7 +221,9 @@ void Simulator::cycle() {
 
       for (int mem_id = 0; mem_id < _n_memories; mem_id++) {
         // ICNT to memory
-        mmcycle(mem_id);
+        if(mem_id==0){
+          int a=0;
+        }
         if (!_icnt->is_empty(_n_cores + mem_id) && request_queue_per_ch[mem_id].size()<buffer_size) {
             // if(_scheduler->layer_num == _scheduler->layer_num_check){
             //   spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, _icnt->top(_n_cores + mem_id)->operand_id,_icnt_cycle);
@@ -226,10 +231,17 @@ void Simulator::cycle() {
           enqueue_request(_icnt->top(_n_cores + mem_id), mem_id);
           _icnt->pop(_n_cores + mem_id);
         }
-        if(!request_queue_per_ch[mem_id].empty() && !_dram->is_full(mem_id, top_request(mem_id))){
-          _dram->push(mem_id, top_request(mem_id));
-          pop_request(mem_id);
-          _nr_to_mem++;
+        mmcycle(mem_id);
+        if(_dram->is_available(mem_id)){
+          for(int temp=0; temp<16; ++temp){
+            if(request_queue_per_ch[mem_id].empty() || mm_flush[mem_id]==0) break;
+              if(top_request(mem_id)->dram_address==8669376||top_request(mem_id)->dram_address==8667936||top_request(mem_id)->dram_address==12866112||top_request(mem_id)->dram_address==12862240){
+                int a=3;
+              }
+              _dram->push(mem_id, top_request(mem_id));
+              pop_request(mem_id);
+              _nr_to_mem++;
+          }
         }
         // Pop response to ICNT from dram
         if (!_dram->is_empty(mem_id) &&
@@ -379,29 +391,6 @@ void Simulator::turn_issue_core(){
   distribute_cycle = (distribute_cycle + 1) % (request_line*_config.num_cores);
 }
 
-void Simulator::enqueue_request(MemoryAccess* request, uint32_t ch){
-  std::vector<uint32_t> addr_vec = get_vecctor(request);
-  RequestEntry req_entry = {request, addr_vec, addr_vec[4], 0, 0};
-  if(_scheduler->layer_num==_scheduler->layer_num_check){
-    spdlog::info("push:ch={},addr={},queue={},cycle={}",ch,request->dram_address,request_queue_per_ch[ch].size(),_core_cycles);
-  }
-
-  // std::deque<RequestEntry>& request_buffer = request_buffer_per_ch[ch];
-  std::deque<RequestEntry>& request_queue = request_queue_per_ch[ch];
-
-  request_queue.push_back(req_entry);
-  // spdlog::info("addr = {}, {}",request->dram_address, addr_vec);
-  // if(_icnt_cycle%4000 == 0) spdlog::info("ch = {}, buffer= {} ,queue={}, cycle={}",ch, request_buffer.size(), request_queue.size(), _core_cycles);
-  // spdlog::info("ch = {}, buffer= {} ,queue={}, cycle={}",ch, request_buffer.size(), request_queue.size(), _core_cycles);
-
-}
-
-
-MemoryAccess* Simulator::top_request(uint32_t mem_id){
-  if (request_queue_per_ch[mem_id].empty()) return nullptr;
-  return request_queue_per_ch[mem_id].front().req;
-}
-
 std::vector<uint32_t> Simulator::get_vecctor(MemoryAccess* request){
   uint32_t _n_ch = _config.dram_channels;
   uint32_t _req_size = _config.dram_req_size;
@@ -420,173 +409,156 @@ std::vector<uint32_t> Simulator::get_vecctor(MemoryAccess* request){
   return vec;
 }
 
-void Simulator::mmcycle(uint32_t ch){
+MemoryAccess* Simulator::top_request(uint32_t mem_id){
+  if (request_queue_per_ch[mem_id].empty()) return nullptr;
+  return request_queue_per_ch[mem_id].front().req;
+}
+
+void Simulator::enqueue_request(MemoryAccess* request, uint32_t ch){
+  std::vector<uint32_t> addr_vec = get_vecctor(request);
+  RequestEntry req_entry = {request, addr_vec, addr_vec[4], 0, 0};
+  if(_scheduler->layer_num==_scheduler->layer_num_check){
+    spdlog::info("push:ch={},addr={},queue={},cycle={}",ch,request->dram_address,request_queue_per_ch[ch].size(),_core_cycles);
+  }
+  // spdlog::info("push:ch={},addr={},{},queue={},cycle={}",ch,request->dram_address,addr_vec, request_queue_per_ch[ch].size(),_core_cycles);
+
+  if(request->dram_address==8669376 || request->dram_address==8667936 || request->dram_address==12866112){
+    int a=0;
+  }
   std::deque<RequestEntry>& request_queue = request_queue_per_ch[ch];
-  auto is_row_hit = [&](const RequestEntry& entry, int idx) {
-        const auto& v = entry.addr_vec;
-        auto key = std::make_tuple(v[0], v[1], v[2], v[3]);
-        auto it = active_row_map.find(key);
-        if(it==active_row_map.end()) return false;
+  
+  auto key = std::make_tuple(addr_vec[1], addr_vec[2], addr_vec[3], addr_vec[4]); // pseudo, bg, bk, row
+  uint32_t row = addr_vec[4];
+  auto iter = active_row_map[ch].find(key);
+  if (iter == active_row_map[ch].end()) {
+        RowState rs{ {row}, 1, 0 };
+        active_row_map[ch][key] = rs;
+        active_row_order[ch].push_back(key);
+  }else{
+    active_row_map[ch][key].cnt++;
+  }
 
-        const auto& rows = it->second.active_rows;
-        if (rows.size() <= static_cast<size_t>(idx)) return false;
 
-        return (rows[idx] == v[4]);
-    };
+  request_queue.push_back(req_entry);
+}
 
-  auto begin_it = request_queue.begin();
+void Simulator::mmcycle(uint32_t ch){
+  
+  std::deque<RequestEntry>& request_queue = request_queue_per_ch[ch];
+  for (auto& entry : request_queue) {
+    entry.timer += 1;
+  }
+  std::vector<std::tuple<uint32_t,uint32_t,uint32_t,uint32_t>>& row_order = active_row_order[ch];
+  if(request_queue.empty()) return;
+  // 각 active row key의 등장 순서대로 stable_partition 수행
+  auto key = row_order.front();
+  auto begin_it = std::stable_partition(
+        request_queue.begin(),
+        request_queue.end(),
+        [&](const RequestEntry& e) {
+            auto k = std::make_tuple(e.addr_vec[1], e.addr_vec[2], e.addr_vec[3], e.addr_vec[4]);
+            return k == key;
+        }
+    );
 
-  for (int i = 0; i < _config.num_cores; i++) {
-        begin_it = std::stable_partition(begin_it, request_queue.end(),
-            [&](const RequestEntry& e){ return is_row_hit(e, i); });
+  if (row_order.size() > 1) {
+        auto key_second = row_order[1];
+        std::stable_partition(
+            begin_it, // 앞의 첫 번째 row 이후부터 시작
+            request_queue.end(),
+            [&](const RequestEntry& e) {
+                auto k = std::make_tuple(e.addr_vec[1], e.addr_vec[2], e.addr_vec[3], e.addr_vec[4]);
+                return k == key_second;
+            }
+        );
     }
+  
+  if(row_order.size()>_config.num_cores*2){
+    // while(!row_order.empty()){
+      auto key = row_order.front();
+      auto iter = active_row_map[ch].find(key);
+      auto count = iter->second.cnt;
+      if(ch==0){
+        int a= count;
+      }
+
+      // if (count == 0) {
+      //     row_order.erase(row_order.begin());
+      //     if (iter != active_row_map[ch].end())
+      //       active_row_map[ch].erase(iter);
+      //     continue;
+      // }
+      mm_flush[ch] = count;
+      if(ch==0){
+        int a= count;
+      }
+    // break;
+    // }
+  }else{
+    bool has_write = std::any_of(
+      request_queue.begin(),
+      request_queue.end(),
+      [](const RequestEntry& e) {
+          return e.req && e.req->operand_id == 200;
+      }
+    );
+    // if(has_write || request_queue.front().timer>1000){
+    if(request_queue.front().timer>1000){
+      mm_flush[ch] = request_queue.size();
+      if(ch==0){
+        int a= request_queue.size();
+      }
+    } 
+  }
+
+  
 
 }
 
 void Simulator::pop_request(uint32_t mem_id){
-  auto it = request_queue_per_ch[mem_id].front();
-  auto key = std::make_tuple(it.addr_vec[0], it.addr_vec[1], it.addr_vec[2], it.addr_vec[3]);
-  uint32_t row = it.addr_vec[4];
-  auto iter = active_row_map.find(key);
-  if (iter == active_row_map.end()) {
-        RowState rs;
-        rs.active_rows.push_back(row);
-        rs.cnt = 1;
-        rs.timer = 0;
-        active_row_map[key] = rs;
-  }else {
-      auto& vec = iter->second.active_rows;
-      if (std::find(vec.begin(), vec.end(), row) == vec.end()) {
-          if (vec.size() >= _config.num_cores) {
-              // row buffer가 다 찼으면 FIFO 방식으로 하나 제거
-              vec.erase(vec.begin());
-          }
-          vec.push_back(row); // 새 row를 가장 최근 위치에 추가
+  std::deque<RequestEntry>& request_queue = request_queue_per_ch[mem_id];
+  if(request_queue.empty()) return;
+  // RequestEntry entry = std::move(request_queue.front());
+  if(mem_id==0){
+        int a=3;
       }
+
+  RequestEntry entry = std::move(request_queue.front());
+  request_queue.pop_front();
+  mm_flush[mem_id]--;
+  if(mem_id==0){
+    int a=3;
   }
 
-  request_queue_per_ch[mem_id].pop_front();
+  auto key = std::make_tuple(
+        entry.addr_vec[1],
+        entry.addr_vec[2],
+        entry.addr_vec[3],
+        entry.addr_vec[4]
+    );
+  auto iter = active_row_map[mem_id].find(key);
+      if (iter != active_row_map[mem_id].end()) {
+          if (iter->second.cnt > 0)
+              iter->second.cnt--;
+
+          // 더 이상 남은 요청이 없으면 제거
+          if (iter->second.cnt == 0) {
+              active_row_map[mem_id].erase(iter);
+                if(mem_id==0){
+                  int a=3;
+                }
+
+              // row_order에서도 제거
+              // row_order.erase(row_order.begin());
+              auto& row_order = active_row_order[mem_id];
+              row_order.erase(
+                  std::remove(row_order.begin(), row_order.end(), key),
+                  row_order.end()
+              );
+          }
+      }
+
+
+
 }
 
-// void Simulator::mmcycle(uint32_t ch){
-//   std::deque<RequestEntry>& request_buffer = request_buffer_per_ch[ch];
-//   std::deque<MemoryAccess*>& request_queue = request_queue_per_ch[ch];
-//   // if(request_buffer.size()>20){
-//   //   spdlog::info("larger than 20");
-//   // }
-  
-//   // print
-//   // if(request_queue.size()==0 && request_buffer.size()!=0){
-//   //   spdlog::info("state[{}] : buffer={}, queue={}, cycle={}",ch,request_buffer.size(), request_queue.size(), _core_cycles);
-//   // }
-//   //print
-
-//   if(_core_cycles%8000==0 && print_state_once==0){
-//     spdlog::info("state[{}] : buffer={}, queue={}, cycle={}",ch,request_buffer.size(), request_queue.size(), _core_cycles);
-//     print_state_once=1;
-//     }
-
-//   // buffer가 절반 찼는데 queue 중에 active_row_map에 activate된 row와 매핑되는 게 없으면 row은 precharge
-//   if(request_buffer.size()>=buffer_size){
-//     std::vector<std::tuple<uint32_t,uint32_t,uint32_t,uint32_t>> to_erase;
-//     for (auto& [key, row_info] : active_row_map){
-//       bool found = false;
-//       for (auto const& buf : request_buffer){
-//         auto buf_key = std::make_tuple(buf.addr_vec[0], buf.addr_vec[1], buf.addr_vec[2], buf.addr_vec[3]);
-//         if (buf_key == key && buf.addr_vec[4] == row_info.row) {
-//             found = true;
-//             break;
-//         }
-//       }
-//       row_info.timer++;
-//       if(!found){
-//         // spdlog::info("== early erase == {}, buffer={}, queue={}", key, request_buffer.size(), request_queue.size());
-//         to_erase.push_back(key);
-//       }
-      
-//     }
-//     for (auto const& k : to_erase){
-//       active_row_map.erase(k);
-//     }
-//   }
-
-//   // buffer의 entry중 activate된 row의 data가 있으면 serving
-//   if(request_queue.size()>queue_size/4){
-//     for(auto it = request_buffer.begin(); it != request_buffer.end();){
-//       const bool mis_match = it->req->core_id != mm_rr[ch];
-//       const bool empty_queue = request_queue.empty();
-//       // if(it->req->operand_id==200){
-//       //   spdlog::info("wr : ");
-//       // }
-//       it->timer++;
-//       if(mis_match && !empty_queue){
-//         ++it;
-//         continue;
-//       } 
-//       if(request_queue.size()>=queue_size) break;
-//       auto key = std::make_tuple(it->addr_vec[0], it->addr_vec[1], it->addr_vec[2], it->addr_vec[3]);
-//       uint32_t row = it->addr_vec[4];
-//       auto iter = active_row_map.find(key); 
-//         if(it->req->operand_id==200 || it->req->operand_id==102){
-//           request_queue.push_back(it->req);
-//           active_row_map.erase(key);
-//           it = request_buffer.erase(it);
-//         }
-//         else if (iter != active_row_map.end() && iter->second.row == row) {
-//           // spdlog::info("hit : [{}-{}], addr={}, {}, queue={},{}, cycle={}",key, row, it->req->dram_address, addr_vec, request_buffer.size(), request_queue.size(), _icnt_cycle);
-//           if(_scheduler->layer_num==_scheduler->layer_num_check){
-//             spdlog::info("predict:hit:{},{},{}",ch,it->req->dram_address,_core_cycles);
-//           }
-//           request_queue.push_back(it->req);
-//           active_row_map[key].cnt++;
-//           active_row_map[key].timer = 0;
-//           mm_rr[ch] = (it->req->core_id+1)%_config.num_cores;
-//           it = request_buffer.erase(it);
-//         }else if(iter == active_row_map.end()){
-//           // spdlog::info("miss : [{}-{}], addr={}, {}, queue={}, cycle={}", key, row, it->req->dram_address, addr_vec, request_buffer.size(), request_queue.size(), _icnt_cycle);
-//           active_row_map[key] = {row, 1, 0};
-//           if(_scheduler->layer_num==_scheduler->layer_num_check){
-//           spdlog::info("predict:conflict:{},{},{}",ch,it->req->dram_address,_core_cycles);
-//           }
-//           request_queue.push_back(it->req);
-//           mm_rr[ch] = (it->req->core_id+1)%_config.num_cores;
-//           it = request_buffer.erase(it);
-//         }
-//         else{
-//           active_row_map[key].timer++;
-//           ++it;
-//         }
-      
-//       // row 마다 16개 col에 접근하면 precharge
-//       // if (active_row_map[key].cnt >= 16 || active_row_map[key].timer > 10000) {
-//       auto map_it = active_row_map.find(key);
-//       if (map_it != active_row_map.end() && map_it->second.cnt >= 16) {
-//           active_row_map.erase(map_it);
-//       }
-//     }
-//   }
-//   else{
-//     if (request_buffer.empty()) return;
-//     auto entry = request_buffer.front();
-//     uint32_t row = entry.addr_vec[4];
-//     auto key = std::make_tuple(entry.addr_vec[0], entry.addr_vec[1], entry.addr_vec[2], entry.addr_vec[3]);
-//     active_row_map[key] = {row, 1, 0};
-//     request_queue.push_back(entry.req);
-//     request_buffer.pop_front();
-//   }
-  
-//   // // queue는 비었는데 buffer는 가득차면 active_row 초기화
-//   // if(request_queue.empty() && request_buffer.size()>=buffer_size){
-//   //   spdlog::info("-- flush -- cycle={}",_core_cycles);
-//   //   for (const auto&[key, value] : active_row_map){
-//   //     const auto& [ch, pseu, bg, bk] = key;
-//   //     uint32_t row = value.row;
-//   //     spdlog::info("flush-map : [{}, {}, {}, {}, {}] , timer={}",ch,pseu,bg,bk,row,value.timer);
-//   //   }
-//   //   for(int i=0; i<request_buffer.size(); ++i){
-//   //     spdlog::info("flush_buf : {}, {}, timer={}",request_buffer[i].req->dram_address, request_buffer[i].addr_vec, request_buffer[i].timer);
-//   //   }
-//   //   active_row_map.clear();
-//   // }
-  
-// }

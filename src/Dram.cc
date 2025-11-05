@@ -159,6 +159,7 @@ bool DramRamulator2::running() {
 }
 
 void DramRamulator2::cycle() {
+  _cycles++;
   for (int ch = 0; ch < _n_ch; ch++) {
     _mem[ch]->layer_num = layer_num;
     _mem[ch]->layer_num_check = layer_num_check;
@@ -174,9 +175,9 @@ void DramRamulator2::get_input_weight_req(uint32_t cid){
   total = sizes[0];
   input_size = sizes[1];
   weight_size = sizes[2];
-  if(layer_num==layer_num_check){
-    spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
-  }
+  // if(layer_num==layer_num_check){
+  //   spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
+  // }
 }
 
 bool DramRamulator2::is_available(uint32_t cid) {

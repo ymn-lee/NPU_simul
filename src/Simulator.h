@@ -68,12 +68,14 @@ class Simulator {
   std::vector<uint32_t> get_vecctor(MemoryAccess* request);
   std::vector<uint32_t> slice_vec = {4,1,2,2,15};  // col, pse, bg, bk, row
   std::deque<std::deque<RequestEntry>> request_queue_per_ch;
+  std::vector<std::vector<std::tuple<uint32_t,uint32_t,uint32_t,uint32_t>>> active_row_order;
   // std::deque<std::deque<RequestEntry>> request_buffer_per_ch;
   uint32_t buffer_size = 256;
   uint32_t queue_size = 256;
   uint32_t rows_num = 16*2*4*4*16;
   std::vector<uint32_t> mm_rr;
-  std::map<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>, RowState> active_row_map;
+  std::vector<std::map<std::tuple<uint32_t, uint32_t, uint32_t, uint32_t>, RowState>> active_row_map;
+  std::vector<uint32_t> mm_flush;
 
   // std::vector<std::vector<uint32_t>> cor
 

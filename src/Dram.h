@@ -27,11 +27,12 @@ class Dram {
   virtual void get_input_weight_req(uint32_t cid) {};
   uint32_t layer_num;
   uint32_t layer_num_check;
+  uint32_t dram_input_capacity = 128;
+  cycle_type _cycles;
 
  protected:
   SimulationConfig _config;
   uint32_t _n_ch;
-  cycle_type _cycles;
 };
 
 class SimpleDram : public Dram {
