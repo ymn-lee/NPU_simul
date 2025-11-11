@@ -22,7 +22,7 @@ class Scheduler {
     virtual bool empty();
     virtual bool tile_queue_empty();
     uint32_t layer_num=0;
-    uint32_t layer_num_check=0;
+    uint32_t layer_num_check=-1;
     bool divided_c = false;
     std::vector<bool> layer_finish;
     std::deque<int> prev_layer_start;

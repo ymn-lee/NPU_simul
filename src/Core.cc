@@ -70,6 +70,7 @@ void Core::issue(std::unique_ptr<Tile> op) {
   if (_running_layer != op->layer_id) {
     _running_layer = op->layer_id;
   }
+  spdlog::info("get_tile {},{}, cycle={}",_id, spad_id, _core_cycle);
   _tiles.push_back(std::move(op));
 }
 
@@ -160,9 +161,9 @@ void Core::cycle() {
       break;
     }
   }
-  // if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
-  //   print_current_stats();
-  // }
+  if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
+    print_current_stats();
+  }
 }
 
 bool Core::running() {
