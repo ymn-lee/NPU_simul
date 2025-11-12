@@ -23,6 +23,16 @@ addr_type allocate_address(uint32_t size) {
   return result;
 }
 
+std::vector<std::string> split(const std::string& str, char delimiter) {
+  std::vector<std::string> tokens;
+  std::string token;
+  std::istringstream tokenStream(str);
+  while (std::getline(tokenStream, token, delimiter)) {
+    tokens.push_back(token);
+  }
+  return tokens;
+}
+
 template <typename T>
 T get_config_value(json config, std::string key) {
   if (config.contains(key)) {

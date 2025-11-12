@@ -103,8 +103,13 @@ void Attention::initialize_tiles(MappingTable& mapping_table) {
     int core_id = -1;
     for (uint32_t N = 0; N < mapping.tile_out_loop.N; N++) {
         int heads_per_kv = _nh / _nkvh;
+
+        /* implementation */
         int qlen_offset = mapping.tile_out_loop.N / _nkvh;
-        int head_off = N / qlen_offset * heads_per_kv;
+        // int head_off = N / qlen_offset * heads_per_kv;
+        int head_off = 0;
+        /* implementation */
+
         for(int M = 0; M < mapping.tile_out_loop.M; M++) {
             if (M == 0) {
                 core_id = (core_id + 1) % _config.num_cores;
@@ -340,7 +345,12 @@ void Attention::initialize_instructions(Tile* tile, int head_idx, int num_heads)
 void Attention::initialize_instructions(Tile* tile, Mapping mapping, int head_idx, int num_heads) {
     // head_idx # start idx
     // num_heads
-    int qlen_offset = mapping.tile_out_loop.N / _nkvh;
+
+    /* implementation */
+    // int qlen_offset = mapping.tile_out_loop.N / _nkvh;
+    int qlen_offset = 1;
+    /* implementation */
+
     int q_ffset = tile->batch % qlen_offset;
     uint32_t q_len = mapping.tile_in_loop.N / num_heads;
     uint32_t seq_len = mapping.tile_in_loop.M;
@@ -715,10 +725,21 @@ void Attention::calculate_loops(Mapping& mapping) {
         mapping.total_loop.M = _seq;
         mapping.tile_out_loop.C = 1;
         mapping.tile_in_loop.C = _dk;
-        mapping.tile_in_loop.N = q_len * heads_per_kv;
+
+        /* implementation */
+        mapping.tile_in_loop.N = q_len * heads_per_kv * tile_out_loop;  // imp
+        // mapping.tile_in_loop.N = q_len * heads_per_kv;
+        /* implementation */
+
         mapping.tile_in_loop.M = seq_len;
-        mapping.tile_out_loop.N = tile_out_loop;
-        mapping.total_loop.N = mapping.tile_in_loop.N * tile_out_loop;
+
+        /* implementation */
+        mapping.tile_out_loop.N = 1;  // imp
+        // mapping.tile_out_loop.N = tile_out_loop;
+        /* implementation */
+
+        // mapping.total_loop.N = mapping.tile_in_loop.N * tile_out_loop;
+        mapping.total_loop.N = q_len * heads_per_kv * tile_out_loop; //imp
         mapping.tile_out_loop.M = ceil_div(mapping.total_loop.M, mapping.tile_in_loop.M);
     }
 }

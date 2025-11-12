@@ -22,6 +22,7 @@ class Model {
     std::string get_name() { return _name; }
     uint32_t executable_layer_size();
     Operation* get_executable_tile();
+    bool check_attn_inst();
     uint64_t get_request_time() const { return _request_time; }
     void set_request_time(uint64_t request_time) { _request_time=request_time; }
     uint64_t get_start_time() const { return _start_time; }

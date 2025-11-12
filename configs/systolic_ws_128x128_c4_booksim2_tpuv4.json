@@ -106,5 +106,5 @@
 
   "precision" : 2,
   "layout" : "NHWC",
-  "scheduler" : "simple"
+  "scheduler" : "atten_split"
 }

@@ -17,6 +17,7 @@ class Scheduler {
     virtual std::unique_ptr<Tile> get_tile(uint32_t core_id);
     virtual void issue_tile_per_core();
     virtual void issue_tile_per_core(std::vector<uint32_t>& allowed_cpu, int offset, uint32_t partition_id);
+    virtual void issue_tile_per_core(int assignd_core_id);
     virtual bool is_accum_tile(uint32_t core_id, int index);
     virtual void finish_tile(uint32_t core_id, int layer_id);
     virtual bool empty();
@@ -39,8 +40,11 @@ class Scheduler {
       uint32_t remain_tiles;
       uint32_t finished_tiles;
       uint32_t launched_tiles;
+      std::string optype = "";
     } LayerStat;
 
+    int remained_batch;
+    int _base_offset = 0;
     int _core_rr_id = 0;
     const cycle_type* _core_cycle;
     const uint64_t* _core_time;
@@ -89,5 +93,16 @@ class HalfSplitScheduler : public Scheduler {
     
   protected:
     virtual void refresh_status() override;
+    robin_hood::unordered_map<uint32_t, std::deque<std::unique_ptr<Tile>>> _executable_tile_queue_table;
+};
+
+class AttenSplitScheduler : public Scheduler {
+  public:
+    AttenSplitScheduler(SimulationConfig config, const cycle_type* core_cycle, const uint64_t* core_time, void* simulator);
+    
+    
+  protected:
+    virtual void refresh_status() override;
+    virtual void finish_tile(uint32_t core_id, int layer_id) override;
     robin_hood::unordered_map<uint32_t, std::deque<std::unique_ptr<Tile>>> _executable_tile_queue_table;
 };

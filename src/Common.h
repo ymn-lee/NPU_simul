@@ -127,6 +127,7 @@ struct Tile {
   bool is_gemm = false;
 } ;
 
+std::vector<std::string> split(const std::string& str, char delimiter);
 uint32_t generate_id();
 uint32_t generate_mem_access_id();
 addr_type allocate_address(uint32_t size);

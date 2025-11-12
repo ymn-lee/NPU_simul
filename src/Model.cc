@@ -186,6 +186,22 @@ uint32_t Model::executable_layer_size() {
   return _executable_layer.size();
 }
 
+bool Model::check_attn_inst(){
+  Operation* op = nullptr;
+  bool result = false;
+  std::vector<std::string> tokens; 
+  if (_executable_layer.size()){
+    op = _executable_layer.front();
+    tokens = split(op->_name, '.');
+    if(tokens.size() > 3){
+      if(result = tokens[2] == "Attention"){
+        result = true;
+      }
+    }
+  }
+  return result;
+}
+
 Operation* Model::get_executable_tile() {
   Operation* op = nullptr;
   if (_executable_layer.size()){
