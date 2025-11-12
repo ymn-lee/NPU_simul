@@ -113,11 +113,11 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
     inner_I = dim_I;
     inner_J = (dim - 16)*2;
     inner_K = dim;
-    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / 2 && inner_J*2 <= dim_J_padded){
-      inner_J *= 2;
-    }
-    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / 2 && inner_K*2 <= dim_K_padded){
+    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_K*2 <= dim_K_padded){
       inner_K *= 2;
+    }
+    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_J*2 <= dim_J_padded){
+      inner_J *= 2;
     }
 
     tile_I = ceil_div(inner_I,inner_I);
