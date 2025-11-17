@@ -88,7 +88,7 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   uint32_t turn = 0;
 
   // acc 최적화 -  prefill
-  if(dim_I > 1<<5){
+  if(dim>>3 < dim_I){
     while((log_inner_i_j[0]+log_inner_i_j[1] < log_acc_spad_size) && (log_outer_i_j[0]+log_outer_i_j[1] > 2)){
       if(log_outer_i_j[turn] != 0){
         log_inner_i_j[turn] += 1;
@@ -111,7 +111,7 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
     tile_K = ceil_div(dim_K_padded,inner_K);
   }else{  // acc 최적화 decoding
     inner_I = dim_I;
-    inner_J = (dim - 16)*2;
+    inner_J = (dim - dim_I)*2;
     inner_K = dim;
     while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_K*2 <= dim_K_padded){
       inner_K *= 2;

@@ -65,6 +65,9 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
           .core_id = core_id
         });
         _tiles.push_back(std::move(tile));
+        if(M==439){
+          int a=0;
+        }
         if(mapping.total_loop.N>16){
           initialize_instructions(_tiles.back().get(), mapping);
         }else{
@@ -363,7 +366,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
         }
       }
 
-      if(array_box == array_min_box){
+      if(array_box >= array_min_box){
         if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){  // N이 큰 경우
           if(Ms==0){
             Ns += loop_size;
@@ -384,7 +387,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
           array_box += loop_size;
           Ms = array_box;
           Ns = 0;
-          if(array_box == array_min_box){
+          if(array_box >= array_min_box){
             if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){
               Ns = array_box;
               Ms = array_box - loop_size;
@@ -435,6 +438,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
     int m_loop = M_offset + loop_size > mapping.total_loop.M
                      ? mapping.total_loop.M - M_offset
                      : loop_size;
+    if(m_loop<0) break;
     /* MOVIN BIAS */
     if(m_loop>0 && Ms<mapping.tile_in_loop.M){
       if(!tile->accum && has_bias && Ms<mapping.tile_in_loop.M) { 
@@ -551,6 +555,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
     int m_loop = M_offset + loop_size > mapping.total_loop.M
                      ? mapping.total_loop.M - M_offset
                      : loop_size;
+    if(m_loop<0) break;
     if(m_loop>0 && Ms<mapping.tile_in_loop.M){
       int C_offset = tout_c_offset + Cs;
       int c_in_loop = C_offset + cloop_size > mapping.total_loop.C
@@ -639,6 +644,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
       int m_loop = M_offset + loop_size > mapping.total_loop.M
                       ? mapping.total_loop.M - M_offset
                       : loop_size;
+      if(m_loop<0) break;
       if(m_loop>0 && Ms<mapping.tile_in_loop.M){
         int N_offset = tout_n_offset + Ns;
         int n_loop = N_offset + loop_size > mapping.total_loop.N
