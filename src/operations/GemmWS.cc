@@ -409,6 +409,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
 // imp_6 decoding 2axis
 void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
   int tout_m_offset = tile->M * mapping.tile_in_loop.M;
+  int tout_m_next_offset = (tile->M+1) * mapping.tile_in_loop.M;
   int tout_c_offset = tile->C * mapping.tile_in_loop.C;
   int tout_n_offset = tile->batch * mapping.tile_in_loop.N;
   int elems_per_access = _config.dram_req_size / _config.precision;
@@ -435,8 +436,8 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
 
   while(Ms<mapping.tile_in_loop.M || Ns<mapping.tile_in_loop.N){
     int M_offset = tout_m_offset + Ms;
-    int m_loop = M_offset + loop_size > mapping.total_loop.M
-                     ? mapping.total_loop.M - M_offset
+    int m_loop = M_offset + loop_size > std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M))
+                     ? std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M)) - M_offset
                      : loop_size;
     if(m_loop<0) break;
     /* MOVIN BIAS */
@@ -552,8 +553,8 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
   int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
   while( !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ns>0 && Ms==0) && !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ms>=mapping.tile_in_loop.M) ){
     int M_offset = tout_m_offset + Ms;
-    int m_loop = M_offset + loop_size > mapping.total_loop.M
-                     ? mapping.total_loop.M - M_offset
+    int m_loop = M_offset + loop_size > std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M))
+                     ? std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M)) - M_offset
                      : loop_size;
     if(m_loop<0) break;
     if(m_loop>0 && Ms<mapping.tile_in_loop.M){
@@ -641,9 +642,9 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
     int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
     while( !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ns>0 && Ms==0) && !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ms>=mapping.tile_in_loop.M) ){
       int M_offset = tout_m_offset + Ms;
-      int m_loop = M_offset + loop_size > mapping.total_loop.M
-                      ? mapping.total_loop.M - M_offset
-                      : loop_size;
+      int m_loop = M_offset + loop_size > std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M))
+                     ? std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M)) - M_offset
+                     : loop_size;
       if(m_loop<0) break;
       if(m_loop>0 && Ms<mapping.tile_in_loop.M){
         int N_offset = tout_n_offset + Ns;
