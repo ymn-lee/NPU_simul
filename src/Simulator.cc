@@ -71,7 +71,6 @@ Simulator::Simulator(SimulationConfig config, bool language_mode)
     _cores[core_index] = Core::create(core_index, config);
   }
 
-
   core_turn.resize(config.num_cores);
   for(int i=0; i<config.num_cores; ++i){
     core_turn[i]=0;
@@ -80,6 +79,7 @@ Simulator::Simulator(SimulationConfig config, bool language_mode)
   for(int i=0; i<config.num_cores; ++i){
     idle_ld_cores[i]=true;
   }
+
   //Configure Hardware Scheduler
   _scheduler = Scheduler::create(_config, &_core_cycles, &_core_time, this);
   _scheduler->layer_finish.resize(config.num_cores, false);
@@ -181,14 +181,12 @@ void Simulator::cycle() {
       for (int core_id = 0; core_id < _n_cores; core_id++) {
         // PUHS core to ICNT. memory request
         if (_cores[core_id]->has_memory_request()) {
+          idle_ld_cores[core_id] = false;
           MemoryAccess *front = _cores[core_id]->top_memory_request();
           front->core_id = core_id;
           if (!_icnt->is_full(core_id, front)) {
-            if(_scheduler->layer_num == _scheduler->layer_num_check){
-              spdlog::info("c2i,core={},buffer_id={},ch={},addr={},op={},cycle={}",core_id, front->buffer_id, get_dest_node(front)-4, front->dram_address, front->operand_id, _core_cycles);
-            }
-            // _icnt->push(core_id, get_dest_node(front), front); // reference
             _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
+            // _icnt->push(core_id, get_dest_node(front), front); // reference
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
             if(_scheduler->layer_num==_scheduler->layer_num_check){
@@ -210,9 +208,6 @@ void Simulator::cycle() {
         // ICNT to memory
         if (!_icnt->is_empty(_n_cores + mem_id) &&
             !_dram->is_full(mem_id, _icnt->top(_n_cores + mem_id))) {
-          if(_scheduler->layer_num == _scheduler->layer_num_check){
-            spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, _icnt->top(_n_cores + mem_id)->operand_id,_core_cycles);
-          }
           _dram->push(mem_id, _icnt->top(_n_cores + mem_id));
           _icnt->pop(_n_cores + mem_id);
           _nr_to_mem++;
@@ -220,8 +215,8 @@ void Simulator::cycle() {
         // Pop response to ICNT from dram
         if (!_dram->is_empty(mem_id) &&
             !_icnt->is_full(_n_cores + mem_id, _dram->top(mem_id))) {
-          // _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id)), _dram->top(mem_id));
           _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id), idle_ld_cores, core_turn, _dram->top(mem_id)->core_id), _dram->top(mem_id));  // imp_1_separated_ch
+          // _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id)), _dram->top(mem_id));  //  reference
           _dram->pop(mem_id);
           _nr_from_mem++;
         }

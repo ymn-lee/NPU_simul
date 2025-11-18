@@ -89,6 +89,7 @@ GemmWS::GemmWS(SimulationConfig config, Model* model, std::string name,
 //                theoretical_time * 1e3, theoretical_compute_time * 1e3, theoretical_mem_time * 1e3);
 // }
 
+
 // imp_6 decoding
 void GemmWS::initialize_tiles(MappingTable& mapping_table) {
   Mapping::LoopCounts key{.N = _output_shape[_input_shape.size()-2 + Ndim] * _batch_size,
