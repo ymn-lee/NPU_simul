@@ -112,37 +112,39 @@ void GemmWS::initialize_tiles(MappingTable& mapping_table) {
   int core_id = -1; // starts from 0
   // spdlog::info("gen_tile");
   for (uint32_t N = 0; N < mapping.tile_out_loop.N; N++) {
-    for (uint32_t M = 0; M < mapping.tile_out_loop.M; M++) {
-      for (uint32_t C = 0; C < mapping.tile_out_loop.C; C++) {
-        if (C == 0) {
-          core_id = (core_id + 1) % _config.num_cores;
+    for(uint32_t skipped_C = 0; skipped_C < mapping.tile_out_loop.C; skipped_C+=2){
+      for (uint32_t M = 0; M < mapping.tile_out_loop.M; M++) {
+        for (uint32_t in_C = 0; in_C < 2; in_C++) {
+          uint32_t C = skipped_C + in_C;
+          if(C >= mapping.tile_out_loop.C) continue;
+          if (in_C == 0) {
+            core_id = (core_id + 1) % _config.num_cores;
+          }
+          std::unique_ptr<Tile> tile = std::make_unique<Tile>(Tile{
+            .status = Tile::Status::INITIALIZED,
+            .optype = "Gemm",
+            .layer_id = _id,
+            .batch = N,
+            .Q = 1,
+            .P = 1,
+            .M = M,
+            .C = C,
+            .S = 1,
+            .R = 1,
+            .accum = C != 0,
+            .core_id = core_id
+          });
+          tile->is_gemm = true;
+          _tiles.push_back(std::move(tile));
+          if(mapping.total_loop.N>16){
+            initialize_instructions(_tiles.back().get(), mapping);
+          }else{
+            initialize_decoding_instructions(_tiles.back().get(), mapping);
+          }
+          
+          if (!_tiles.back().get()->instructions.size())
+            _tiles.pop_back();
         }
-        std::unique_ptr<Tile> tile = std::make_unique<Tile>(Tile{
-          .status = Tile::Status::INITIALIZED,
-          .optype = "Gemm",
-          .layer_id = _id,
-          .batch = N,
-          .Q = 1,
-          .P = 1,
-          .M = M,
-          .C = C,
-          .S = 1,
-          .R = 1,
-          .accum = C != 0,
-          .core_id = core_id
-        });
-        _tiles.push_back(std::move(tile));
-        if(M==439){
-          int a=0;
-        }
-        if(mapping.total_loop.N>16){
-          initialize_instructions(_tiles.back().get(), mapping);
-        }else{
-          initialize_decoding_instructions(_tiles.back().get(), mapping);
-        }
-        
-        if (!_tiles.back().get()->instructions.size())
-          _tiles.pop_back();
       }
     }
   }
@@ -513,7 +515,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
   /* Compute */
   int array_box = 0;
   int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
-  while( !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ns>0 && Ms==0) && !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ms>=mapping.tile_in_loop.M) ){
+  while( !(Ns>=mapping.tile_in_loop.N-loop_size && Ns>0 && Ms==0) && !(Ns>=mapping.tile_in_loop.N-loop_size && Ms>=mapping.tile_in_loop.M) ){
     int M_offset = tout_m_offset + Ms;
     int m_loop = M_offset + loop_size > mapping.total_loop.M
                      ? mapping.total_loop.M - M_offset
@@ -554,7 +556,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
       }
     }
 
-    if(array_box == array_min_box){
+    if(array_box >= array_min_box){
       if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){  // N이 큰 경우
         if(Ms==0){
           Ns += loop_size;
@@ -563,7 +565,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
           Ms -= loop_size;
         }
       }else{                            // M이 큰 경우
-        if(Ns==array_box-loop_size){
+        if(Ns>=array_box-loop_size){
           Ns = 0;
           Ms += loop_size;
         }else{
@@ -575,7 +577,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
         array_box += loop_size;
         Ms = array_box;
         Ns = 0;
-        if(array_box == array_min_box){
+        if(array_box >= array_min_box){
           if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){
             Ns = array_box;
             Ms = array_box - loop_size;
@@ -601,7 +603,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
   if (tout_c_offset + mapping.tile_in_loop.C >= mapping.total_loop.C){
     int array_box = 0;
     int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
-    while( !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ns>0 && Ms==0) && !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ms>=mapping.tile_in_loop.M) ){
+    while( !(Ns>=mapping.tile_in_loop.N-loop_size && Ns>0 && Ms==0) && !(Ns>=mapping.tile_in_loop.N-loop_size && Ms>=mapping.tile_in_loop.M) ){
       int M_offset = tout_m_offset + Ms;
       int m_loop = M_offset + loop_size > mapping.total_loop.M
                       ? mapping.total_loop.M - M_offset
@@ -647,7 +649,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
             Ms -= loop_size;
           }
         }else{                            // M이 큰 경우
-          if(Ns==array_box-loop_size){
+          if(Ns>=array_box-loop_size){
             Ns = 0;
             Ms += loop_size;
           }else{
