@@ -45,6 +45,7 @@ typedef struct {
   cycle_type dram_enter_cycle;
   cycle_type dram_finish_cycle;
   int buffer_id;
+  bool is_copied = false;;
 } MemoryAccess;
 
 enum class Opcode {
@@ -92,6 +93,7 @@ typedef struct {
   bool src_from_accum = false;
   bool zero_init = false;
   bool last_inst = false;
+  bool is_copy  = false;
   Tile* my_tile;
   std::string to_string();
 } Instruction;

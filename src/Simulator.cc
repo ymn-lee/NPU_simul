@@ -114,6 +114,7 @@ void Simulator::handle_model() {
 }
 
 void Simulator::cycle() {
+  uint32_t cnt = 0;
   OpStat op_stat;
   ModelStat model_stat;
   uint32_t tile_count;
@@ -186,18 +187,41 @@ void Simulator::cycle() {
           front->core_id = core_id;
           if (!_icnt->is_full(core_id, front)) {
             _icnt->push(core_id, get_dest_node(front), front); // reference
+            // if(core_id==1){
+            //   spdlog::info("core[1] push to mem, cycle={}", _core_cycles);
+            // }
             // _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
-            if(_scheduler->layer_num==_scheduler->layer_num_check){
-              _dram->get_input_weight_req(get_dest_node(front)-_config.num_cores);
-            }
+            _dram->get_input_weight_req(get_dest_node(front)-_config.num_cores);
           }
         }else{
           idle_ld_cores[core_id] = true;
         }
         // Push response from ICNT. to Core.
         if (!_icnt->is_empty(core_id)) {
+          MemoryAccess* message = _icnt->top(core_id);
+          if(message->operand_id==100 && !message->is_copied){  // imp _ 2 network division
+            for(int core_rr=0; core_rr<_config.num_cores; ++core_rr){
+              if(core_rr != core_id){
+                MemoryAccess* copy_message = new MemoryAccess(*message);
+                copy_message->is_copied = true;
+                copy_message->core_id = core_rr;
+                _cores[core_rr]->copy_data(copy_message);
+                // if(core_id==0 & core_rr==3){
+                //   spdlog::info("push -> {}, cnt={}, cycle={}", copy_message->dram_address, cnt, _core_cycles);
+                // }
+                // if(core_id==1){
+                //   spdlog::info("core[1] push to core, cycle={}", _core_cycles);
+                // }
+                _icnt->push(core_id, core_rr, copy_message);
+                cnt++;
+              }
+            }
+          }
+          // if(_icnt->top(core_id)->is_copied){
+          //   int a=0;
+          // }
           _cores[core_id]->push_memory_response(_icnt->top(core_id));
           _icnt->pop(core_id);
           _nr_to_core++;
@@ -310,38 +334,39 @@ uint32_t Simulator::get_dest_node(MemoryAccess *access) {
 
 uint32_t Simulator::get_dest_node(MemoryAccess *access, std::vector<bool> idle_ld_cores, std::vector<uint32_t> &core_turn, uint32_t core_id) {
   uint32_t cur_turn = core_turn[core_id];
-  uint32_t lower_2bit = _dram->get_channel_id(access) & 3;
+  uint32_t target_ch = _dram->get_channel_id(access) ;
+  uint32_t lower_2bit = target_ch & 3;
   uint32_t upper_2bit = core_id;
   std::vector<bool> temp_idle_ld_cores = idle_ld_cores;
   temp_idle_ld_cores[core_id] = true;
   uint32_t result_id; 
   bool available = true;
 
-  for(int j=0; j<4; ++j){
-    available = _dram->is_available(core_id*4+j);
-    if(!available) break;
-  }
+  // for(int j=0; j<4; ++j){
+  //   available = _dram->is_available(core_id*4+j);
+  //   if(!available) break;
+  // }
 
-  if(!available){
-    for(int i=1; i<_config.num_cores; ++i){
-      int turn = (i+cur_turn)%_config.num_cores;
-      if(!temp_idle_ld_cores[turn]) continue;
-      for(int j=0; j<4; ++j){
-        available = _dram->is_available(turn*4+j);
-        if(!available) break;
-      }
-      if(!available) continue;
-      core_turn[core_id] = turn;
-      upper_2bit = turn;
-      break;
-    }
-  }
+  // if(!available){
+  //   for(int i=1; i<_config.num_cores; ++i){
+  //     int turn = (i+cur_turn)%_config.num_cores;
+  //     if(!temp_idle_ld_cores[turn]) continue;
+  //     for(int j=0; j<4; ++j){
+  //       available = _dram->is_available(turn*4+j);
+  //       if(!available) break;
+  //     }
+  //     if(!available) continue;
+  //     core_turn[core_id] = turn;
+  //     upper_2bit = turn;
+  //     break;
+  //   }
+  // }
   
   result_id = _config.num_cores + ((upper_2bit & 3)<<2)+(lower_2bit & 3);
 
-  if (access->request) {
+  if (access->request && access->operand_id!=100) {
     return result_id;
-  } else {
+  }else {
     return access->core_id;
   }
 }

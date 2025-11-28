@@ -1,4 +1,5 @@
 #include "Sram.h"
+#include "Core.h"
 #define NUM_PORTS 3
 
 Sram::Sram(SimulationConfig config, const cycle_type& core_cycle, bool accum, uint32_t core_id)
@@ -83,6 +84,33 @@ void Sram::flush(int buffer_id) {
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
 }
 
+int Sram::copy_prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) { // imp_5 reuse_spad
+  if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
+    if (!check_remain(allocated_size, buffer_id)) {
+      print_all(buffer_id);
+      assert(0);
+      return 0;
+    }
+    _current_size[buffer_id] += allocated_size;
+  } else if (_cache_table[buffer_id].find(address) !=
+                 _cache_table[buffer_id].end() &&
+             _accum) {
+    assert(_cache_table[buffer_id].at(address).size == allocated_size);
+    return 0;
+  } else {
+    return 0;
+  }
+  
+  _cache_table[buffer_id][address].size += allocated_size;
+  spdlog::info("prefetch_copy = core={}, {} += {}, addr={}",core_id, _cache_table[buffer_id][address].size, allocated_size, address);
+  // _cache_table[buffer_id][address] = SramEntry{.valid = false,
+  //                                              .size = allocated_size,
+  //                                              .remain_req_count = count,
+  //                                              .is_input = is_input,
+  //                                              .timestamp = _core_cycle};
+  return 1;
+}
+
 int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) { // imp_5 reuse_spad
   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
     if (!check_remain(allocated_size, buffer_id)) {
@@ -101,11 +129,13 @@ int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size
     return 0;
   }
   
+  
   _cache_table[buffer_id][address] = SramEntry{.valid = false,
                                                .size = allocated_size,
                                                .remain_req_count = count,
                                                .is_input = is_input,
                                                .timestamp = _core_cycle};
+  // spdlog::info("prefetch = core={}, {} += {}, addr={}",core_id, _cache_table[buffer_id][address].size, allocated_size, address);
   return 1;
 }
 
@@ -116,7 +146,7 @@ void Sram::fill(addr_type address, int buffer_id) {
   _cache_table[buffer_id].at(address).remain_req_count--;
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
-    is_valid[buffer_id] = true;
+    // is_valid[buffer_id] = true;
     spdlog::trace("MAKE valid {} {}F", buffer_id, address);
   }
 }
@@ -126,6 +156,10 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32
   assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
          !_cache_table[buffer_id].at(address).valid);
   _cache_table[buffer_id].at(address).remain_req_count--;
+  if(operand_id==100 && is_valid[buffer_id]>0) is_valid[buffer_id]--;
+  // if(core_id==1){
+  //   spdlog::info("[{},{}] remain = {}, {}, id={}, cycle={}", core_id, buffer_id, _cache_table[buffer_id].at(address).remain_req_count,is_valid[buffer_id], operand_id, _core_cycle);
+  // }
   if(layer_num==layer_num_check){
       if(address >= ACCUM_SPAD_BASE){
         spdlog::info("[{}]core exec valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
@@ -133,12 +167,15 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32
         spdlog::info("[{}]core load valid {}, {}, {}, remain={}, cycle={}", core_id, buffer_id, address, dram_address, _cache_table[buffer_id].at(address).remain_req_count, _core_cycle);
       }
     }
+  // spdlog::info("fill = core={}, addr={}, buffer_id={}, cycle={}, remain={}",core_id, address, buffer_id, _core_cycle, _cache_table[buffer_id].at(address).remain_req_count);
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
-    is_valid[buffer_id] = true; // tile 내부의 inst가 순차적으로 요청되게 traffic 조절
+    
+    // is_valid[buffer_id] = true; // tile 내부의 inst가 순차적으로 요청되게 traffic 조절
     if(operand_id == 101 && can_issue_second_tile>0) { 
       can_issue_second_tile -- ; // 두 번째 weight가 와야 두 번째 tile issue
     }
+    // spdlog::info("MAKE valid [{},{}] {}F", core_id, buffer_id, address);
     // spdlog::info("MAKE valid {}, {}, {}, input={}, cycle={}, cyc={}", core_id, buffer_id, address, operand_id==100?true:false, _core_cycle, _core_cycle+256);
   }
 }

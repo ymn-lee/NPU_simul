@@ -176,6 +176,7 @@ void DramRamulator2::get_input_weight_req(uint32_t cid){
   if(layer_num==layer_num_check){
     spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
   }
+  // spdlog::info("dram_queue{}:total={},input={},weight={},core_cycle={}", cid, total, input_size, weight_size,_core_cycle);
 }
 
 bool DramRamulator2::is_available(uint32_t cid) {

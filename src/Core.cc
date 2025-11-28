@@ -124,6 +124,9 @@ void Core::cycle() {  // imp_5 reuse
     if(_tiles[i]->instructions.empty()) 
       continue;
     std::unique_ptr<Instruction>& inst = _tiles[i]->instructions.front();
+    if(_core_cycle==8){
+      int a =0;
+    }
     if(_tiles[i]->instructions.size() == 1) {
       inst->last_inst = true;
       inst->my_tile = _tiles[i].get();
@@ -200,9 +203,9 @@ void Core::cycle() {  // imp_5 reuse
     }
   }
   
-  // if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
-  //   print_current_stats();
-  // }
+  if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
+    print_current_stats();
+  }
 }
 
 bool Core::running() {
@@ -254,6 +257,9 @@ bool Core::can_issue_compute(std::unique_ptr<Instruction>& inst) { // imp_5 reus
     } else {
       result = result && _spad.check_hit(weight_addr, inst->spad_id);
     }
+    // if(!result){
+    //   spdlog::info("can_issue[{}] = {}, {}, cycle={}", _id, input_addr, weight_addr, _core_cycle);
+    // }
   }else{
     for (addr_type addr : inst->src_addrs) {
       if (inst->src_from_accum && addr >= ACCUM_SPAD_BASE) {
@@ -263,6 +269,7 @@ bool Core::can_issue_compute(std::unique_ptr<Instruction>& inst) { // imp_5 reus
       }
     }
   }
+  
   
   if (!result) {
     for (addr_type addr : inst->src_addrs) {
@@ -375,48 +382,64 @@ void Core::finish_vector_pipeline() {
   }
 }
 
+void Core::copy_data(MemoryAccess* response){
+  Sram *buffer;
+  buffer = &_spad;
+  int buffer_id = response->buffer_id;
+  int ret = buffer->copy_prefetch(response->spad_address, buffer_id, response->size, response->size, true);
+}
+
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
-    std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
-    if (front->opcode == Opcode::MOVIN) {
+  // if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  if (!_ld_inst_queue.empty()) {  // imp_2 guaranteed load
+    // std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
+    std::unique_ptr<Instruction>& front_check = _ld_inst_queue.front();
+    if (front_check->opcode == Opcode::MOVIN){
       bool prefetched = false;
       Sram *buffer;
       int buffer_id;
-      if (front->dest_addr >= ACCUM_SPAD_BASE) {
+      if (front_check->dest_addr >= ACCUM_SPAD_BASE) {
         buffer = &_acc_spad;
-        buffer_id = front->accum_spad_id;
+        buffer_id = front_check->accum_spad_id;
       } else {
         buffer = &_spad;
-        buffer_id = front->spad_id;
-        buffer->is_valid[buffer_id]=false;
+        buffer_id = front_check->spad_id;
       }
-      bool is_input = front->operand_id==100 ? true : false;
-
-      if (front->size==0) {
-        spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
+      bool is_input = front_check->operand_id==100 ? true : false;
+      // if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operan/d_id!=101){
+      if(true){
+        std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
+        if (front->size==0) {
+          spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
+        }
+        int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
+        // spdlog::info("core={}, prefetch={}",_id, front->dest_addr);
+        if (!ret) {
+          spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
+          spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
+          std::exit(EXIT_FAILURE);
+        }
+        for (addr_type addr : front->src_addrs) {
+          // if(front->is_copy) break;
+          assert(front->base_addr != GARBEGE_ADDR);
+          MemoryAccess *access =
+              new MemoryAccess({.id = generate_mem_access_id(),
+                                .dram_address = addr + front->base_addr,
+                                .spad_address = front->dest_addr,
+                                .size = _config.dram_req_size,
+                                .write = false,
+                                .request = true,
+                                .operand_id = front->operand_id,
+                                .core_id = _id,
+                                .start_cycle = _core_cycle,
+                                .buffer_id = buffer_id});
+          _request_queue.push(access);
+        }
+        if(front->operand_id==100){
+          buffer->is_valid[buffer_id] += front->size;
+        }
+        _ld_inst_queue.pop();
       }
-      int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
-      if (!ret) {
-        spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
-        spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
-        std::exit(EXIT_FAILURE);
-      }
-      for (addr_type addr : front->src_addrs) {
-        assert(front->base_addr != GARBEGE_ADDR);
-        MemoryAccess *access =
-            new MemoryAccess({.id = generate_mem_access_id(),
-                              .dram_address = addr + front->base_addr,
-                              .spad_address = front->dest_addr,
-                              .size = _config.dram_req_size,
-                              .write = false,
-                              .request = true,
-                              .operand_id = front->operand_id,
-                              .core_id = _id,
-                              .start_cycle = _core_cycle,
-                              .buffer_id = buffer_id});
-        _request_queue.push(access);
-      }
-      _ld_inst_queue.pop();
     } else {
       assert(0);
     }

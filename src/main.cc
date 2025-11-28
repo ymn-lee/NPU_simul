@@ -13,6 +13,7 @@ namespace fs = std::filesystem;
 namespace po = boost::program_options;
 
 int main(int argc, char** argv) {
+  
   auto start = std::chrono::high_resolution_clock::now();
   // parse command line argumnet
   CommandLineParser cmd_parser = CommandLineParser();
@@ -44,7 +45,7 @@ int main(int argc, char** argv) {
   std::string save_name = "log";
   cmd_parser.set_if_defined("save_name", &save_name);
   std::string log_file_name = save_name + ".txt";
-  auto file_logger = spdlog::basic_logger_mt("file_logger", log_file_name);
+  auto file_logger = spdlog::basic_logger_mt("file_logger", log_file_name, true);
   spdlog::set_default_logger(file_logger);
 
   std::string model_base_path = fs::path(onnxim_path).append("models");
