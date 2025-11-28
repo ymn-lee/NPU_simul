@@ -153,11 +153,12 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32
   assert(check_allocated(address, buffer_id));
   assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
          !_cache_table[buffer_id].at(address).valid);
-  _cache_table[buffer_id].at(address).remain_req_count--;
+  if(_cache_table[buffer_id].at(address).remain_req_count>0) _cache_table[buffer_id].at(address).remain_req_count--;
   if(operand_id==100 && is_valid[buffer_id]>0) is_valid[buffer_id]--;
-  // if(core_id==1){
-  //   spdlog::info("[{},{}] remain = {}, {}, id={}, cycle={}", core_id, buffer_id, _cache_table[buffer_id].at(address).remain_req_count,is_valid[buffer_id], operand_id, _core_cycle);
-  // }
+  if(layer_num==layer_num_check){
+    spdlog::info("[{},{}] remain = {}, {}, id={}, cycle={}", core_id, buffer_id, _cache_table[buffer_id].at(address).remain_req_count,is_valid[buffer_id], operand_id, _core_cycle);
+  }
+  // spdlog::info("[{},{}] remain = {}, {}, addr={}, id={}, cycle={}", core_id, buffer_id, _cache_table[buffer_id].at(address).remain_req_count,is_valid[buffer_id], address, operand_id, _core_cycle);
 
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;

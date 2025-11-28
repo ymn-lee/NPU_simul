@@ -187,11 +187,14 @@ void Simulator::cycle() {
           if (!_icnt->is_full(core_id, front)) {
             _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
             // _icnt->push(core_id, get_dest_node(front), front); // reference
+            if(_scheduler->layer_num==_scheduler->layer_num_check && core_id==1){
+              spdlog::info("core[1] receive");
+            }
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
-            if(_scheduler->layer_num==_scheduler->layer_num_check){
-              _dram->get_input_weight_req(get_dest_node(front)-_config.num_cores);
-            }
+            // if(_scheduler->layer_num==_scheduler->layer_num_check){
+            //   _dram->get_input_weight_req(get_dest_node(front)-_config.num_cores);
+            // }
           }
         }else{
           idle_ld_cores[core_id] = true;
@@ -199,14 +202,18 @@ void Simulator::cycle() {
         // Push response from ICNT. to Core.
         if (!_icnt->is_empty(core_id)) {  //  response_copy
           MemoryAccess* message = _icnt->top(core_id);
-          if(message->operand_id==100 && !message->is_copied){
+          if(message->operand_id==100 && !message->is_copied && _scheduler->is_gemm_layer){
             for(int core_rr=0; core_rr<_config.num_cores; ++core_rr){
               if(core_rr != core_id){
                 MemoryAccess* copy_message = new MemoryAccess(*message);
                 copy_message->is_copied = true;
                 copy_message->core_id = core_rr;
                 _cores[core_rr]->copy_data(copy_message);
+                if(_scheduler->layer_num==_scheduler->layer_num_check && core_id==1){
+                  spdlog::info("core[1] push");
+                }
                 _icnt->push(core_id, core_rr, copy_message);
+                
               }
             }
           }

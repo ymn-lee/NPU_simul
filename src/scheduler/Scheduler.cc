@@ -235,6 +235,7 @@ void Scheduler::refresh_status() {
       return;
 
     spdlog::info("Start layer {}", new_layer->get_name().c_str());
+    
     _request_queue.front().model->update_start_time(*_core_time);
     /* Get tiles from new layer */
     _executable_tile_queue[0].insert(
@@ -312,6 +313,7 @@ void AttenSplitScheduler::refresh_status(){
           if (new_layer == nullptr)
             return;
           spdlog::info("Start layer {}, cycle = {}", new_layer->get_name().c_str(), *_core_cycle);
+          
           _request_queue.front().model->update_start_time(*_core_time);
           /* Get tiles from new layer */
           _executable_tile_queue[assignd_core_id].insert(
@@ -345,6 +347,7 @@ void AttenSplitScheduler::refresh_status(){
         return;
       prev_layer_start.push_back(*_core_cycle);
       spdlog::info("Start layer {}, cycle = {}", new_layer->get_name().c_str(), *_core_cycle);
+      is_gemm_layer = new_layer->gemm_layer;
       _request_queue.front().model->update_start_time(*_core_time);
       /* Get tiles from new layer */
       _executable_tile_queue[0].insert(

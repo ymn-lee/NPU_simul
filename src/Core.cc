@@ -206,9 +206,6 @@ void Core::pop_memory_request() {
 }
 
 void Core::push_memory_response(MemoryAccess *response) {
-  if(response->is_copied){
-    int a = 0;
-  }
   assert(!response->request);  // can only push response
   if (response->write) {
     _waiting_write_reqs--;
@@ -400,7 +397,7 @@ void Core::handle_ld_inst_queue() {
         buffer_id = front_check->spad_id;
       }
       bool is_input = front_check->operand_id==100 ? true : false;
-      if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operand_id!=101){
+      // if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operand_id!=101){
         std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
         if (front->size==0) {
           spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
@@ -424,15 +421,15 @@ void Core::handle_ld_inst_queue() {
                                 .operand_id = front->operand_id,
                                 .core_id = _id,
                                 .start_cycle = _core_cycle,
-                                .buffer_id = buffer_id,
-                                .is_copied = false});
+                                .buffer_id = buffer_id});
           _request_queue.push(access);
         }
       if(front->operand_id==100){
         buffer->is_valid[buffer_id] += front->size;
       }
+
       _ld_inst_queue.pop();
-      }
+      // }
     } else {
       assert(0);
     }

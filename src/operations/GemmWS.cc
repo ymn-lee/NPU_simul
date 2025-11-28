@@ -22,6 +22,7 @@ GemmWS::GemmWS(SimulationConfig config, Model* model, std::string name,
                std::map<std::string, std::string>& attributes, uint32_t target_core)
     : Gemm(config, model, name, attributes, target_core) {
   has_bias = std::stoi(get_attribute("has_bias"));
+  this->gemm_layer = true;
 }
 
 // void GemmWS::initialize_tiles(MappingTable& mapping_table) {
