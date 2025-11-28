@@ -82,31 +82,28 @@ void Sram::flush(int buffer_id) {
   spdlog::trace("{}SRAM[{}] Flush", _accum? "Acc-": "", buffer_id);
 }
 
-// int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size,
-//                     size_t count) {
-//   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
-//     if (!check_remain(allocated_size, buffer_id)) {
-//       print_all(buffer_id);
-//       assert(0);
-//       return 0;
-//     }
-//     _current_size[buffer_id] += allocated_size;
-//   } else if (_cache_table[buffer_id].find(address) !=
-//                  _cache_table[buffer_id].end() &&
-//              _accum) {
-//     assert(_cache_table[buffer_id].at(address).size == allocated_size);
-//     return 0;
-//   } else {
-//     assert(0);
-//     return 0;
-//   }
+int Sram::copy_prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) { // imp_2 core copy
+  if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
+    if (!check_remain(allocated_size, buffer_id)) {
+      print_all(buffer_id);
+      assert(0);
+      return 0;
+    }
+    _current_size[buffer_id] += allocated_size;
+  } else if (_cache_table[buffer_id].find(address) !=
+                 _cache_table[buffer_id].end() &&
+             _accum) {
+    assert(_cache_table[buffer_id].at(address).size == allocated_size);
+    return 0;
+  } else {
+    return 0;
+  }
+  
+  _cache_table[buffer_id][address].size += allocated_size;
+  // spdlog::info("prefetch_copy = core={}, {} += {}, addr={}",core_id, _cache_table[buffer_id][address].size, allocated_size, address);
 
-//   _cache_table[buffer_id][address] = SramEntry{.valid = false,
-//                                                .size = allocated_size,
-//                                                .remain_req_count = count,
-//                                                .timestamp = _core_cycle};
-//   return 1;
-// }
+  return 1;
+}
 
 int Sram::prefetch(addr_type address, int buffer_id, size_t allocated_size, size_t count, bool is_input) { // imp_5 reuse_spad
   if (_cache_table[buffer_id].find(address) == _cache_table[buffer_id].end()) {
@@ -149,6 +146,21 @@ void Sram::fill(addr_type address, addr_type dram_address, int buffer_id) {
   if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
     _cache_table[buffer_id].at(address).valid = true;
     spdlog::trace("MAKE valid {} {}F", buffer_id, address);
+  }
+}
+
+void Sram::fill(addr_type address, addr_type dram_address, int buffer_id, uint32_t operand_id) {
+  assert(check_allocated(address, buffer_id));
+  assert(_cache_table[buffer_id].at(address).remain_req_count > 0 &&
+         !_cache_table[buffer_id].at(address).valid);
+  _cache_table[buffer_id].at(address).remain_req_count--;
+  if(operand_id==100 && is_valid[buffer_id]>0) is_valid[buffer_id]--;
+  // if(core_id==1){
+  //   spdlog::info("[{},{}] remain = {}, {}, id={}, cycle={}", core_id, buffer_id, _cache_table[buffer_id].at(address).remain_req_count,is_valid[buffer_id], operand_id, _core_cycle);
+  // }
+
+  if (_cache_table[buffer_id].at(address).remain_req_count == 0) {
+    _cache_table[buffer_id].at(address).valid = true;
   }
 }
 

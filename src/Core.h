@@ -33,6 +33,7 @@ class Core {
   virtual cycle_type get_compute_cycles() { return _stat_tot_compute_cycle; }
 
   virtual void flush_queue();
+  virtual void copy_data(MemoryAccess* response);
   bool turn_m = false;
   bool turn_v = false;
   

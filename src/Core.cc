@@ -206,6 +206,9 @@ void Core::pop_memory_request() {
 }
 
 void Core::push_memory_response(MemoryAccess *response) {
+  if(response->is_copied){
+    int a = 0;
+  }
   assert(!response->request);  // can only push response
   if (response->write) {
     _waiting_write_reqs--;
@@ -213,7 +216,7 @@ void Core::push_memory_response(MemoryAccess *response) {
     _acc_spad.fill(response->spad_address, response->dram_address, response->buffer_id);
   } else {
     assert(_spad.check_allocated(response->spad_address, response->buffer_id));
-    _spad.fill(response->spad_address, response->dram_address, response->buffer_id);
+    _spad.fill(response->spad_address, response->dram_address, response->buffer_id, response->operand_id); // imp_3_interleaved_tile
   }
   delete response;
 }
@@ -374,47 +377,62 @@ void Core::finish_vector_pipeline() {
   }
 }
 
+void Core::copy_data(MemoryAccess* response){
+  Sram *buffer;
+  buffer = &_spad;
+  int buffer_id = response->buffer_id;
+  int ret = buffer->copy_prefetch(response->spad_address, buffer_id, response->size, response->size, true);
+}
+
+
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty()) {
-    std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
-    if (front->opcode == Opcode::MOVIN) {
+  if (!_ld_inst_queue.empty()) { 
+    Instruction* front_check = _ld_inst_queue.front().get();
+    if (front_check->opcode == Opcode::MOVIN){
       bool prefetched = false;
       Sram *buffer;
       int buffer_id;
-      if (front->dest_addr >= ACCUM_SPAD_BASE) {
+      if (front_check->dest_addr >= ACCUM_SPAD_BASE) {
         buffer = &_acc_spad;
-        buffer_id = front->accum_spad_id;
+        buffer_id = front_check->accum_spad_id;
       } else {
         buffer = &_spad;
-        buffer_id = front->spad_id;
+        buffer_id = front_check->spad_id;
       }
-      bool is_input = front->operand_id==100 ? true : false;
-      if (front->size==0) {
-        spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
-      }
-      // int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size);
-      int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
-      if (!ret) {
-        spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
-        spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
-        std::exit(EXIT_FAILURE);
-      }
-      for (addr_type addr : front->src_addrs) {
-        assert(front->base_addr != GARBEGE_ADDR);
-        MemoryAccess *access =
-            new MemoryAccess({.id = generate_mem_access_id(),
-                              .dram_address = addr + front->base_addr,
-                              .spad_address = front->dest_addr,
-                              .size = _config.dram_req_size,
-                              .write = false,
-                              .request = true,
-                              .operand_id = front->operand_id,
-                              .core_id = _id,
-                              .start_cycle = _core_cycle,
-                              .buffer_id = buffer_id});
-        _request_queue.push(access);
+      bool is_input = front_check->operand_id==100 ? true : false;
+      if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operand_id!=101){
+        std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
+        if (front->size==0) {
+          spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
+        }
+        // int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size);
+        int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
+        if (!ret) {
+          spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
+          spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
+          std::exit(EXIT_FAILURE);
+        }
+        for (addr_type addr : front->src_addrs) {
+          assert(front->base_addr != GARBEGE_ADDR);
+          MemoryAccess *access =
+              new MemoryAccess({.id = generate_mem_access_id(),
+                                .dram_address = addr + front->base_addr,
+                                .spad_address = front->dest_addr,
+                                .size = _config.dram_req_size,
+                                .write = false,
+                                .request = true,
+                                .operand_id = front->operand_id,
+                                .core_id = _id,
+                                .start_cycle = _core_cycle,
+                                .buffer_id = buffer_id,
+                                .is_copied = false});
+          _request_queue.push(access);
+        }
+      if(front->operand_id==100){
+        buffer->is_valid[buffer_id] += front->size;
       }
       _ld_inst_queue.pop();
+      }
     } else {
       assert(0);
     }

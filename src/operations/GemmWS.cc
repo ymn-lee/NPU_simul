@@ -379,6 +379,15 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
   int tout_n_offset = tile->batch * mapping.tile_in_loop.N;
   int elems_per_access = _config.dram_req_size / _config.precision;
 
+  int total_tiles = mapping.N * mapping.M * mapping.C;
+  int tile_idx = tile->batch * tile->M * tile->C + tile->M * tile->C + tile->C;
+  int threshold = total_tiles/_config.num_cores;
+  int tick = tile_idx/_config.num_cores;
+  int diviision = _config.num_cores;
+  if(tick==threshold){
+    diviision = total_tiles%_config.num_cores;
+  }
+
   addr_type act_sp_base_addr = SPAD_BASE;
   addr_type weight_sp_base_addr = SPAD_BASE + mapping.tile_in_loop.N *
                                                   mapping.tile_in_loop.C *
@@ -474,6 +483,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
 
       /* MOVIN Activation */
       std::set<addr_type> input_set;
+      std::set<addr_type> input_set_copy;
       for (int iter_n = 0; iter_n < n_loop; iter_n++) {
         for (int iter_c = 0; iter_c < c_in_loop; iter_c+=elems_per_access) {
           uint32_t N = N_offset + iter_n;
@@ -484,15 +494,17 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
           
           else
             index = {N, C};
-          input_set.insert(
-              first_addr + make_address(index, _input_shape));
+          input_set.insert(first_addr + make_address(index, _input_shape));
+          if((iter_n+tile->core_id)%_config.num_cores==0){
+            input_set_copy.insert(first_addr + make_address(index, _input_shape));
+          }
         }
       }
       tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
           .opcode = Opcode::MOVIN,
           .dest_addr = act_sp_addr,
           .size = (uint32_t)input_set.size(),
-          .src_addrs = std::vector<addr_type>(input_set.begin(), input_set.end()),
+          .src_addrs = std::vector<addr_type>(input_set_copy.begin(), input_set_copy.end()),
           .operand_id = _INPUT_OPERAND,
           .tile_k = mapping.tile_in_loop.C,
           .tile_n = mapping.tile_in_loop.N}));

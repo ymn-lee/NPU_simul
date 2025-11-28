@@ -197,7 +197,19 @@ void Simulator::cycle() {
           idle_ld_cores[core_id] = true;
         }
         // Push response from ICNT. to Core.
-        if (!_icnt->is_empty(core_id)) {
+        if (!_icnt->is_empty(core_id)) {  //  response_copy
+          MemoryAccess* message = _icnt->top(core_id);
+          if(message->operand_id==100 && !message->is_copied){
+            for(int core_rr=0; core_rr<_config.num_cores; ++core_rr){
+              if(core_rr != core_id){
+                MemoryAccess* copy_message = new MemoryAccess(*message);
+                copy_message->is_copied = true;
+                copy_message->core_id = core_rr;
+                _cores[core_rr]->copy_data(copy_message);
+                _icnt->push(core_id, core_rr, copy_message);
+              }
+            }
+          }
           _cores[core_id]->push_memory_response(_icnt->top(core_id));
           _icnt->pop(core_id);
           _nr_to_core++;
@@ -317,25 +329,25 @@ uint32_t Simulator::get_dest_node(MemoryAccess *access, std::vector<bool> idle_l
   uint32_t result_id; 
   bool available = true;
 
-  for(int j=0; j<4; ++j){
-    available = _dram->is_available(core_id*4+j);
-    if(!available) break;
-  }
+  // for(int j=0; j<4; ++j){
+  //   available = _dram->is_available(core_id*4+j);
+  //   if(!available) break;
+  // }
 
-  if(!available){
-    for(int i=1; i<_config.num_cores; ++i){
-      int turn = (i+cur_turn)%_config.num_cores;
-      if(!temp_idle_ld_cores[turn]) continue;
-      for(int j=0; j<4; ++j){
-        available = _dram->is_available(turn*4+j);
-        if(!available) break;
-      }
-      if(!available) continue;
-      core_turn[core_id] = turn;
-      upper_2bit = turn;
-      break;
-    }
-  }
+  // if(!available){
+  //   for(int i=1; i<_config.num_cores; ++i){
+  //     int turn = (i+cur_turn)%_config.num_cores;
+  //     if(!temp_idle_ld_cores[turn]) continue;
+  //     for(int j=0; j<4; ++j){
+  //       available = _dram->is_available(turn*4+j);
+  //       if(!available) break;
+  //     }
+  //     if(!available) continue;
+  //     core_turn[core_id] = turn;
+  //     upper_2bit = turn;
+  //     break;
+  //   }
+  // }
   
   result_id = _config.num_cores + ((upper_2bit & 3)<<2)+(lower_2bit & 3);
 

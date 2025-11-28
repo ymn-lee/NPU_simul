@@ -45,6 +45,7 @@ typedef struct {
   cycle_type dram_enter_cycle;
   cycle_type dram_finish_cycle;
   int buffer_id;
+  bool is_copied = false;
 } MemoryAccess;
 
 enum class Opcode {
