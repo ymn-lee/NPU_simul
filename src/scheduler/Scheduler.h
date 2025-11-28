@@ -26,6 +26,7 @@ class Scheduler {
     bool divided_c = false;
     std::vector<bool> layer_finish;
     std::deque<int> prev_layer_start;
+    bool is_gemm_layer;
   protected:
     typedef struct {
       uint32_t id;

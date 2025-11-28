@@ -37,6 +37,7 @@ class Operation {
   virtual bool check_executable();
   bool check_finish() { return _finish; };
   uint32_t target_core=0; // Targeted core id
+  bool gemm_layer = false;
 
  protected:
   virtual void initialize_instructions(Tile* tile, Mapping mapping) {}

@@ -24,6 +24,7 @@ class Simulator {
   const size_t get_number_tile() { return _tile_timestamp.size(); }
   std::vector<uint32_t> core_turn;
   std::vector<bool> idle_ld_cores;
+  bool is_gemm_layer_check=false;
   // void run_offline(std::string model_name, uint32_t sample_count);
   // void run_multistream(std::string model_name, uint32_t sample_count,
   // uint32_t ); void run_server(std::string trace_path);

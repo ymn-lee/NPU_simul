@@ -201,7 +201,7 @@ void Simulator::cycle() {
         // Push response from ICNT. to Core.
         if (!_icnt->is_empty(core_id)) {
           MemoryAccess* message = _icnt->top(core_id);
-          if(message->operand_id==100 && !message->is_copied){  // imp _ 2 network division
+          if(message->operand_id==100 && !message->is_copied && _scheduler->is_gemm_layer){  // imp _ 2 network division
             for(int core_rr=0; core_rr<_config.num_cores; ++core_rr){
               if(core_rr != core_id){
                 MemoryAccess* copy_message = new MemoryAccess(*message);
