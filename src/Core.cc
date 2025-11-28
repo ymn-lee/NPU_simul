@@ -45,6 +45,64 @@ bool Core::can_issue(bool is_accum_tile) {
 }
 
 
+// void Core::issue(std::unique_ptr<Tile> op) {
+//   op->stat = {.start_cycle = _core_cycle,
+//              .cycles = 0,
+//              .compute_cycles = 0,
+//              .memory_stall = 0,
+//              .sram_reads = 0,
+//              .sram_writes = 0};
+//   int spad_id = 0;
+//   int acc_spad_id = 0;
+//   bool reuse_input = false;
+
+//   if (_tiles.size() == 1) {
+//     spad_id = _tiles[0]->spad_id;
+//     acc_spad_id = _tiles[0]->accum_spad_id;
+//     if((_tiles[0]->batch == op->batch) &&(_tiles[0]->C/2 == op->C/2) && (_tiles[0]->is_gemm)){
+//       reuse_input = true;
+//     }
+//   }else{
+//     _spad.can_issue_second_tile = 2;
+//   }
+
+//   /* Double buffer */
+//   spad_id = (spad_id + 1) % 2;
+
+//   // imp_5 ---------- spad_reuse
+//   // check reusable_input
+//   _spad.has_input[spad_id] = reuse_input;
+
+//   if(_spad.has_input[spad_id]){
+//     _spad.flush_weight(spad_id);
+//   }else{
+//     _spad.flush(spad_id);
+//   }
+  
+//   if (!op->accum || !(_current_layer_id == op->layer_id && _current_fused_op_id == op->fused_op_id)) {
+//     /* Accumeulate tile uses same acc spad buffer */
+//     acc_spad_id = (acc_spad_id + 1) % 2;
+//     _acc_spad.flush(acc_spad_id);
+//   }
+//   // imp_5 ---------- spad_reuse
+//   spdlog::info("get_tile core=[{}, {}], cycle={}", _id, spad_id, _core_cycle);
+//   _current_layer_id = op->layer_id;
+//   _current_fused_op_id = op->fused_op_id;
+
+//   op->spad_id = spad_id;
+//   op->accum_spad_id = acc_spad_id;
+//   op->status = Tile::Status::RUNNING;
+//   if (op->skip) {
+//     op->status = Tile::Status::FINISH;
+//     _finished_tiles.push(std::move(op));
+//     return;
+//   }
+//   if (_running_layer != op->layer_id) {
+//     _running_layer = op->layer_id;
+//   }
+//   _tiles.push_back(std::move(op));
+// }
+
 void Core::issue(std::unique_ptr<Tile> op) {
   op->stat = {.start_cycle = _core_cycle,
              .cycles = 0,
@@ -54,38 +112,20 @@ void Core::issue(std::unique_ptr<Tile> op) {
              .sram_writes = 0};
   int spad_id = 0;
   int acc_spad_id = 0;
-  bool reuse_input = false;
 
   if (_tiles.size() == 1) {
     spad_id = _tiles[0]->spad_id;
     acc_spad_id = _tiles[0]->accum_spad_id;
-    if((_tiles[0]->batch == op->batch) &&(_tiles[0]->C/2 == op->C/2) && (_tiles[0]->is_gemm)){
-      reuse_input = true;
-    }
-  }else{
-    _spad.can_issue_second_tile = 2;
   }
 
   /* Double buffer */
   spad_id = (spad_id + 1) % 2;
-
-  // imp_5 ---------- spad_reuse
-  // check reusable_input
-  _spad.has_input[spad_id] = reuse_input;
-
-  if(_spad.has_input[spad_id]){
-    _spad.flush_weight(spad_id);
-  }else{
-    _spad.flush(spad_id);
-  }
-  
+  _spad.flush(spad_id);
   if (!op->accum || !(_current_layer_id == op->layer_id && _current_fused_op_id == op->fused_op_id)) {
     /* Accumeulate tile uses same acc spad buffer */
     acc_spad_id = (acc_spad_id + 1) % 2;
     _acc_spad.flush(acc_spad_id);
   }
-  // imp_5 ---------- spad_reuse
-  spdlog::info("get_tile core=[{}, {}], cycle={}", _id, spad_id, _core_cycle);
   _current_layer_id = op->layer_id;
   _current_fused_op_id = op->fused_op_id;
 
@@ -100,8 +140,10 @@ void Core::issue(std::unique_ptr<Tile> op) {
   if (_running_layer != op->layer_id) {
     _running_layer = op->layer_id;
   }
+  spdlog::info("get_tile {},{}, cycle={}",_id, spad_id, _core_cycle);
   _tiles.push_back(std::move(op));
 }
+
 
 std::unique_ptr<Tile> Core::pop_finished_tile() {
   std::unique_ptr<Tile> result = std::make_unique<Tile>(Tile{});
@@ -113,27 +155,116 @@ std::unique_ptr<Tile> Core::pop_finished_tile() {
   return result;
 }
 
-void Core::cycle() {  // imp_5 reuse
+// void Core::cycle() {  // imp_5 reuse
+//   _core_cycle++;
+//   _spad.cycle();
+//   _acc_spad.cycle();
+//   for (int tile_iter = 0; tile_iter < _tiles.size(); tile_iter++) {
+//     int i = (tile_iter + tile_rr) % _tiles.size();
+//     // int next_id = (i+1) % 2;
+
+//     if(_tiles[i]->instructions.empty()) 
+//       continue;
+//     std::unique_ptr<Instruction>& inst = _tiles[i]->instructions.front();
+//     if(_core_cycle==8){
+//       int a =0;
+//     }
+//     if(_tiles[i]->instructions.size() == 1) {
+//       inst->last_inst = true;
+//       inst->my_tile = _tiles[i].get();
+//     }
+//     inst->spad_id = _tiles[i]->spad_id;
+//     inst->accum_spad_id = _tiles[i]->accum_spad_id;
+    
+//     Sram *buffer;
+//     int buffer_id;
+//     if (inst->dest_addr >= ACCUM_SPAD_BASE) {
+//       buffer = &_acc_spad;
+//       buffer_id = _tiles[i]->accum_spad_id;
+//     } else {
+//       buffer = &_spad;
+//       buffer_id = _tiles[i]->spad_id;
+//     }
+//     buffer->layer_num = layer_num;
+//     buffer->layer_num_check = layer_num_check;
+//     bool issued = false;
+//     if (inst->opcode == Opcode::MOVIN) {
+//       /*LD inst queue */
+//       if (inst->size == 0) {
+//         spdlog::error("[Core {}] MVIN issue addr: {:x}, size: {:x}", _id, inst->dest_addr, inst->size);
+//       }
+
+//       // reuse input
+//       if(_spad.has_input[buffer_id] && inst->operand_id==100){
+//         issued = true;
+//       }
+//       else if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
+//         buffer->check_remain(inst->size, buffer_id)) {
+//         _ld_inst_queue.push(std::move(inst));
+//         issued = true;
+//         }
+//       else {
+//         /*Invalid state */
+//         spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(inst->dest_addr, buffer_id), buffer->check_remain(inst->size, buffer_id));
+//         spdlog::error("[Core {}] MVIN issue panic addr: {:x}, size: {} B", _id, inst->dest_addr, inst->size*_config.dram_req_size);
+//         buffer->print_all(buffer_id);
+//         exit(EXIT_FAILURE);
+//       }
+//     } else if (inst->opcode == Opcode::MOVOUT ||
+//                inst->opcode == Opcode::MOVOUT_POOL) {
+//       /* ST inst queue */
+//       if (buffer->check_hit(inst->dest_addr, buffer_id)) {
+//         _st_inst_queue.push(std::move(inst));
+//         issued = true;
+//       }
+//     } else {
+//       /* Ex inst queue */
+//       if (inst.get() == 0) {
+//         spdlog::error("null instruction!");
+//       }
+//       if(_ex_inst_queue.empty() && can_issue_compute(inst)) {
+//         _ex_inst_queue.push(std::move(inst));
+//         issued = true;
+//       }
+//     }
+//     if (issued) {
+//       _tiles[i]->instructions.pop_front();
+//       tile_rr = i;
+//       break;
+//     }
+//   }
+//   for (auto tile = _tiles.begin() ; tile < _tiles.end(); tile++) {
+//     if ((*tile)->instructions.empty() && (*tile)->inst_finished) {
+//       (*tile)->status = Tile::Status::FINISH;
+//       (*tile)->stat.cycles = _core_cycle - (*tile)->stat.start_cycle;
+//       (*tile)->stat.memory_stall =
+//           (*tile)->stat.cycles - (*tile)->stat.compute_cycles;
+//       _finished_tiles.push(std::move(*tile));
+//       _tiles.erase(tile);
+//       break;
+//     }
+//   }
+  
+//   if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
+//     print_current_stats();
+//   }
+// }
+
+void Core::cycle() {
   _core_cycle++;
   _spad.cycle();
   _acc_spad.cycle();
   for (int tile_iter = 0; tile_iter < _tiles.size(); tile_iter++) {
     int i = (tile_iter + tile_rr) % _tiles.size();
-    // int next_id = (i+1) % 2;
-
     if(_tiles[i]->instructions.empty()) 
       continue;
     std::unique_ptr<Instruction>& inst = _tiles[i]->instructions.front();
-    if(_core_cycle==8){
-      int a =0;
-    }
     if(_tiles[i]->instructions.size() == 1) {
       inst->last_inst = true;
       inst->my_tile = _tiles[i].get();
     }
     inst->spad_id = _tiles[i]->spad_id;
     inst->accum_spad_id = _tiles[i]->accum_spad_id;
-    
     Sram *buffer;
     int buffer_id;
     if (inst->dest_addr >= ACCUM_SPAD_BASE) {
@@ -151,17 +282,11 @@ void Core::cycle() {  // imp_5 reuse
       if (inst->size == 0) {
         spdlog::error("[Core {}] MVIN issue addr: {:x}, size: {:x}", _id, inst->dest_addr, inst->size);
       }
-
-      // reuse input
-      if(_spad.has_input[buffer_id] && inst->operand_id==100){
-        issued = true;
-      }
-      else if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
-        buffer->check_remain(inst->size, buffer_id)) {
+      if (!buffer->check_allocated(inst->dest_addr, buffer_id) &&
+          buffer->check_remain(inst->size, buffer_id)) {
         _ld_inst_queue.push(std::move(inst));
         issued = true;
-        }
-      else {
+      } else {
         /*Invalid state */
         spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(inst->dest_addr, buffer_id), buffer->check_remain(inst->size, buffer_id));
         spdlog::error("[Core {}] MVIN issue panic addr: {:x}, size: {} B", _id, inst->dest_addr, inst->size*_config.dram_req_size);
@@ -202,7 +327,6 @@ void Core::cycle() {  // imp_5 reuse
       break;
     }
   }
-  
   if(_config.core_print_interval && _core_cycle % _config.core_print_interval == 0) {
     print_current_stats();
   }
@@ -241,44 +365,65 @@ void Core::push_memory_response(MemoryAccess *response) {
   delete response;
 }
 
-bool Core::can_issue_compute(std::unique_ptr<Instruction>& inst) { // imp_5 reuse_spad
-  bool result = true;
-  if(inst->src_addrs.size()>1){
-    addr_type input_addr = inst->src_addrs[0];
-    addr_type weight_addr = inst->src_addrs[1];
+// bool Core::can_issue_compute(std::unique_ptr<Instruction>& inst) { // imp_5 reuse_spad
+//   bool result = true;
+//   if(inst->src_addrs.size()>1){
+//     addr_type input_addr = inst->src_addrs[0];
+//     addr_type weight_addr = inst->src_addrs[1];
 
-    if (inst->src_from_accum && input_addr >= ACCUM_SPAD_BASE) {
-      result = result && _acc_spad.check_hit(input_addr, inst->accum_spad_id);
+//     if (inst->src_from_accum && input_addr >= ACCUM_SPAD_BASE) {
+//       result = result && _acc_spad.check_hit(input_addr, inst->accum_spad_id);
+//     } else {
+//       result = result && _spad.check_hit(input_addr, inst->spad_id, _spad.has_input[inst->spad_id]);
+//     }
+//     if (inst->src_from_accum && weight_addr >= ACCUM_SPAD_BASE) {
+//       result = result && _acc_spad.check_hit(weight_addr, inst->accum_spad_id);
+//     } else {
+//       result = result && _spad.check_hit(weight_addr, inst->spad_id);
+//     }
+//     // if(!result){
+//     //   spdlog::info("can_issue[{}] = {}, {}, cycle={}", _id, input_addr, weight_addr, _core_cycle);
+//     // }
+//   }else{
+//     for (addr_type addr : inst->src_addrs) {
+//       if (inst->src_from_accum && addr >= ACCUM_SPAD_BASE) {
+//         result = result && _acc_spad.check_hit(addr, inst->accum_spad_id, false);
+//       } else {
+//         result = result && _spad.check_hit(addr, inst->spad_id, _spad.has_input[inst->spad_id]);
+//       }
+//     }
+//   }
+  
+  
+//   if (!result) {
+//     for (addr_type addr : inst->src_addrs) {
+//       spdlog::trace("Core[{}] Dependency fail : {} , {}", _id, addr,
+//                     _spad.check_hit(addr, inst->spad_id, _spad.has_input[inst->spad_id]));
+//     }
+//   }
+//   return result;
+// }
+
+bool Core::can_issue_compute(std::unique_ptr<Instruction>& inst) {
+  bool result = true;
+
+  for (addr_type addr : inst->src_addrs) {
+    if (inst->src_from_accum && addr >= ACCUM_SPAD_BASE) {
+      result = result && _acc_spad.check_hit(addr, inst->accum_spad_id);
     } else {
-      result = result && _spad.check_hit(input_addr, inst->spad_id, _spad.has_input[inst->spad_id]);
-    }
-    if (inst->src_from_accum && weight_addr >= ACCUM_SPAD_BASE) {
-      result = result && _acc_spad.check_hit(weight_addr, inst->accum_spad_id);
-    } else {
-      result = result && _spad.check_hit(weight_addr, inst->spad_id);
-    }
-    // if(!result){
-    //   spdlog::info("can_issue[{}] = {}, {}, cycle={}", _id, input_addr, weight_addr, _core_cycle);
-    // }
-  }else{
-    for (addr_type addr : inst->src_addrs) {
-      if (inst->src_from_accum && addr >= ACCUM_SPAD_BASE) {
-        result = result && _acc_spad.check_hit(addr, inst->accum_spad_id, false);
-      } else {
-        result = result && _spad.check_hit(addr, inst->spad_id, _spad.has_input[inst->spad_id]);
-      }
+      result = result && _spad.check_hit(addr, inst->spad_id);
     }
   }
-  
-  
   if (!result) {
     for (addr_type addr : inst->src_addrs) {
       spdlog::trace("Core[{}] Dependency fail : {} , {}", _id, addr,
-                    _spad.check_hit(addr, inst->spad_id, _spad.has_input[inst->spad_id]));
+                    _spad.check_hit(addr, inst->spad_id));
     }
   }
   return result;
 }
+
+
 
 void Core::print_stats() {
   update_stats();
@@ -393,7 +538,7 @@ void Core::handle_ld_inst_queue() {
   // if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
   if (!_ld_inst_queue.empty()) {  // imp_2 guaranteed load
     // std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
-    std::unique_ptr<Instruction>& front_check = _ld_inst_queue.front();
+    Instruction* front_check = _ld_inst_queue.front().get();
     if (front_check->opcode == Opcode::MOVIN){
       bool prefetched = false;
       Sram *buffer;
@@ -406,40 +551,39 @@ void Core::handle_ld_inst_queue() {
         buffer_id = front_check->spad_id;
       }
       bool is_input = front_check->operand_id==100 ? true : false;
-      // if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operan/d_id!=101){
-      if(true){
-        std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
-        if (front->size==0) {
-          spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
-        }
-        int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
-        // spdlog::info("core={}, prefetch={}",_id, front->dest_addr);
-        if (!ret) {
-          spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
-          spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
-          std::exit(EXIT_FAILURE);
-        }
-        for (addr_type addr : front->src_addrs) {
-          // if(front->is_copy) break;
-          assert(front->base_addr != GARBEGE_ADDR);
-          MemoryAccess *access =
-              new MemoryAccess({.id = generate_mem_access_id(),
-                                .dram_address = addr + front->base_addr,
-                                .spad_address = front->dest_addr,
-                                .size = _config.dram_req_size,
-                                .write = false,
-                                .request = true,
-                                .operand_id = front->operand_id,
-                                .core_id = _id,
-                                .start_cycle = _core_cycle,
-                                .buffer_id = buffer_id});
-          _request_queue.push(access);
-        }
-        if(front->operand_id==100){
-          buffer->is_valid[buffer_id] += front->size;
-        }
-        _ld_inst_queue.pop();
+      if((front_check->operand_id==101 && buffer->is_valid[buffer_id]==0) || front_check->operand_id!=101){
+      std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
+      if (front->size==0) {
+        spdlog::error("Destination size is 0! opcode: {}, addr: 0x{:x}", (int)front->opcode, front->dest_addr);
       }
+      int ret = buffer->prefetch(front->dest_addr, buffer_id, front->size, front->size, is_input);
+      // spdlog::info("core={}, prefetch={}",_id, front->dest_addr);
+      if (!ret) {
+        spdlog::error("Destination allocated: {} Size remain: {}", buffer->check_allocated(front->dest_addr, buffer_id), buffer->check_remain(front->size, buffer_id));
+        spdlog::error("instruction panic opcode: {:x}, addr: {:x}, size: {} B", (int)front->opcode, front->dest_addr, front->size*_config.dram_req_size);
+        std::exit(EXIT_FAILURE);
+      }
+      for (addr_type addr : front->src_addrs) {
+        // if(front->is_copy) break;
+        assert(front->base_addr != GARBEGE_ADDR);
+        MemoryAccess *access =
+            new MemoryAccess({.id = generate_mem_access_id(),
+                              .dram_address = addr + front->base_addr,
+                              .spad_address = front->dest_addr,
+                              .size = _config.dram_req_size,
+                              .write = false,
+                              .request = true,
+                              .operand_id = front->operand_id,
+                              .core_id = _id,
+                              .start_cycle = _core_cycle,
+                              .buffer_id = buffer_id});
+        _request_queue.push(access);
+      }
+      if(front->operand_id==100){
+        buffer->is_valid[buffer_id] += front->size;
+      }
+      _ld_inst_queue.pop();
+    }
     } else {
       assert(0);
     }
