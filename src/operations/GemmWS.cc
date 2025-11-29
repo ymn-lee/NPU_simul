@@ -724,6 +724,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
 
   int loop_size = (_config.core_config[target_core].core_height - mapping.total_loop.N)*2;
   int cloop_size = mapping.tile_in_loop.C;
+  int cnt = 0;
 
   int Ms = 0;
   int Ns = 0;
@@ -758,6 +759,58 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
     int c_in_loop = C_offset + cloop_size > mapping.total_loop.C
                     ? mapping.total_loop.C - C_offset
                     : cloop_size;
+
+    int N_offset = tout_n_offset + Ns;
+    int n_loop = N_offset + loop_size > mapping.total_loop.N
+                      ? mapping.total_loop.N - N_offset
+                      : loop_size;
+
+    if(n_loop>0 && Ns<mapping.tile_in_loop.N){
+      addr_type act_sp_addr =
+          act_sp_base_addr +
+          (Ns * mapping.tile_in_loop.C + Cs) * _config.precision;
+      addr_type out_sp_addr =
+          ACCUM_SPAD_BASE +
+          (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
+
+      /* MOVIN Activation */
+      std::set<addr_type> input_set;
+      std::set<addr_type> input_set_copy;
+      for (int iter_n = 0; iter_n < n_loop; iter_n++) {
+        cnt = 0;
+        for (int iter_c = 0; iter_c < c_in_loop; iter_c+=elems_per_access) {
+          uint32_t N = N_offset + iter_n;
+          uint32_t C = C_offset + iter_c;
+          std::vector<uint32_t> index;
+          if (_input_shape.size()==3)
+            index = {N/_input_shape.at(1), N%_input_shape.at(1), C};
+          
+          else
+            index = {N, C};
+          input_set.insert(
+              first_addr + make_address(index, _input_shape));
+          if(n_loop>8){
+                if((iter_n+tile->core_id)%_config.num_cores==0){
+                  input_set_copy.insert(first_addr + make_address(index, _input_shape));
+                }
+              }else{
+                if(cnt%_config.num_cores==tile->core_id){
+                  input_set_copy.insert(first_addr + make_address(index, _input_shape));
+                }
+                cnt = (cnt+1)%_config.num_cores;
+              }
+        }
+      }
+      tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
+          .opcode = Opcode::MOVIN,
+          .dest_addr = act_sp_addr,
+          .size = (uint32_t)input_set.size(),
+          .src_addrs = std::vector<addr_type>(input_set_copy.begin(), input_set_copy.end()),
+          .operand_id = _INPUT_OPERAND,
+          .tile_k = mapping.tile_in_loop.C,
+          .tile_n = mapping.tile_in_loop.N}));
+    }
+      
     /* MOVIN Weights */
     if(m_loop>0 && Ms<mapping.tile_in_loop.M){
       addr_type weight_sp_addr =
@@ -789,46 +842,6 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
           .tile_m = mapping.tile_in_loop.M,
           .tile_k = mapping.tile_in_loop.C}));
       }
-    
-
-    int N_offset = tout_n_offset + Ns;
-    int n_loop = N_offset + loop_size > mapping.total_loop.N
-                      ? mapping.total_loop.N - N_offset
-                      : loop_size;
-
-    if(n_loop>0 && Ns<mapping.tile_in_loop.N){
-      addr_type act_sp_addr =
-          act_sp_base_addr +
-          (Ns * mapping.tile_in_loop.C + Cs) * _config.precision;
-      addr_type out_sp_addr =
-          ACCUM_SPAD_BASE +
-          (Ns * mapping.tile_in_loop.M + Ms) * _config.precision;
-
-      /* MOVIN Activation */
-      std::set<addr_type> input_set;
-      for (int iter_n = 0; iter_n < n_loop; iter_n++) {
-        for (int iter_c = 0; iter_c < c_in_loop; iter_c+=elems_per_access) {
-          uint32_t N = N_offset + iter_n;
-          uint32_t C = C_offset + iter_c;
-          std::vector<uint32_t> index;
-          if (_input_shape.size()==3)
-            index = {N/_input_shape.at(1), N%_input_shape.at(1), C};
-          
-          else
-            index = {N, C};
-          input_set.insert(
-              first_addr + make_address(index, _input_shape));
-        }
-      }
-      tile->instructions.push_back(std::make_unique<Instruction>(Instruction{
-          .opcode = Opcode::MOVIN,
-          .dest_addr = act_sp_addr,
-          .size = (uint32_t)input_set.size(),
-          .src_addrs = std::vector<addr_type>(input_set.begin(), input_set.end()),
-          .operand_id = _INPUT_OPERAND,
-          .tile_k = mapping.tile_in_loop.C,
-          .tile_n = mapping.tile_in_loop.N}));
-    }
   
     if(Ms < mapping.tile_in_loop.M){
       Ms += loop_size;
@@ -906,10 +919,10 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
         }
       }
     }else{               // 순회 Loop
-      if(Ms==0){
+      if(Ns==0){
         array_box += loop_size;
-        Ms = array_box;
-        Ns = 0;
+        Ns = array_box;
+        Ms = 0;
         if(array_box >= array_min_box){
           if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){
             Ns = array_box;
@@ -919,10 +932,10 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
             Ms = array_box;
           }
         }
-      }else if(Ns<array_box){
-        Ns += loop_size;
+      }else if(Ms<array_box){
+        Ms += loop_size;
       }else{
-        Ms -= loop_size;
+        Ns -= loop_size;
       }
     }
   }
@@ -991,10 +1004,10 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
           }
         }
       }else{               // 순회 Loop
-        if(Ms==0){
+        if(Ns==0){
           array_box += loop_size;
-          Ms = array_box;
-          Ns = 0;
+          Ns = array_box;
+          Ms = 0;
           if(array_box >= array_min_box){
             if(mapping.tile_in_loop.N > mapping.tile_in_loop.M){
               Ns = array_box;
@@ -1004,10 +1017,10 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
               Ms = array_box;
             }
           }
-        }else if(Ns<array_box){
-          Ns += loop_size;
+        }else if(Ms<array_box){
+          Ms += loop_size;
         }else{
-          Ms -= loop_size;
+          Ns -= loop_size;
         }
       }
     }
