@@ -553,7 +553,7 @@ void GemmWS::initialize_decoding_instructions(Tile* tile, Mapping mapping) {
   int array_min_box = std::min(mapping.tile_in_loop.N, mapping.tile_in_loop.M);
   while( !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ns>0 && Ms==0) && !(Ns>=int(mapping.tile_in_loop.N)-loop_size && Ms>=mapping.tile_in_loop.M) ){
     int M_offset = tout_m_offset + Ms;
-    int m_loop = M_offset + loop_size > std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M))
+    int m_loop = M_offset + loop_size > std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M))   // 2axis data capacity
                      ? std::min(tout_m_next_offset, static_cast<int>(mapping.total_loop.M)) - M_offset
                      : loop_size;
     if(m_loop<0) break;

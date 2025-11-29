@@ -50,7 +50,6 @@ MappingTable MappingTable::parse_mapping_file(
   return map;
 }
 
-// imp_4 tiling optimization //
 void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   uint32_t dim_I, dim_J, dim_K;
   uint32_t dim = _config.core_config[key.target_core].core_height;
@@ -62,91 +61,55 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   dim_J = key.M;
   dim_K = key.C;
 
-  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim; // prefill
+  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim;
   const uint32_t dim_J_padded = (dim_J / dim + (dim_J % dim != 0 )) * dim;
   const uint32_t dim_K_padded = (dim_K / dim + (dim_K % dim != 0 )) * dim;
 
   uint32_t tile_I, tile_J, tile_K;
   uint32_t inner_I, inner_J, inner_K;
-  uint32_t db_mats_in_spad, db_mats_in_acc_spad;
+  uint32_t db_partitions_rows, db_mats_in_partition, db_mats_in_acc;
   uint32_t db_max_tile_i_j, db_max_tile_k;
 
-  db_mats_in_spad = max_spad_rows / dim;  // 512
-  db_mats_in_acc_spad = max_acc_rows / dim;  // 32
+  db_partitions_rows = max_spad_rows / 2;
+  db_mats_in_partition = db_partitions_rows / dim;
+  db_mats_in_acc = max_acc_rows / dim;
+  db_max_tile_i_j = (uint32_t)sqrt(db_mats_in_acc);
+  db_max_tile_k = db_mats_in_partition / db_max_tile_i_j;
 
-  uint32_t max_apad_usage = 1;
-  uint32_t temp_i, temp_j, temp_k;
-  std::deque<std::deque<int>> max_ij_queue;
-
-  uint32_t log_spad_size = log2(db_mats_in_spad);
-  uint32_t log_acc_spad_size = log2(db_mats_in_acc_spad);
-  std::array<uint32_t,2> log_total_i_j = {ceil(log2(ceil_div(dim_I_padded,dim))), ceil(log2(ceil_div(dim_J_padded,dim)))};
-  std::array<uint32_t,2> log_inner_i_j = {0, 0};
-  std::array<uint32_t,2> log_outer_i_j = log_total_i_j;
-  std::array<uint32_t,2> inner_i_j = {0, 0};
-  uint32_t inner_c = dim_K_padded/dim;
-  uint32_t turn = 0;
-
-  // acc 최적화 -  prefill
-  if(dim>>3 < dim_I){
-    while((log_inner_i_j[0]+log_inner_i_j[1] < log_acc_spad_size) && (log_outer_i_j[0]+log_outer_i_j[1] > 2)){
-      if(log_outer_i_j[turn] != 0){
-        log_inner_i_j[turn] += 1;
-        log_outer_i_j[turn] -= 1;
-      }
-      turn = (turn+1)%2;
+  tile_I = std::min(dim_I_padded/dim, ceil_div(dim_I, db_max_tile_i_j*dim));
+  tile_J = std::min(dim_J_padded/dim, ceil_div(dim_J, db_max_tile_i_j*dim));
+  tile_K = std::min(dim_K_padded/dim, ceil_div(dim_K, db_max_tile_k*dim));
+  
+  uint32_t num_tiles = tile_I * tile_J; //Skip C dim that needs accum
+  if(num_tiles < _config.num_cores) {
+    int increase_tile = ceil_div(_config.num_cores, num_tiles);
+    if(dim_J > dim_I && dim_J > _config.num_cores) {
+      tile_J *= increase_tile;
+    } else if(dim_I > dim_J && dim_I > _config.num_cores) {
+      tile_I *= increase_tile;
     }
-    inner_i_j = {1u<<log_inner_i_j[0],1u<<log_inner_i_j[1]};
-
-    // C 최적화
-    while((inner_i_j[0]+inner_i_j[1])*inner_c>db_mats_in_spad){
-      inner_c /= 2;
-    }
-    inner_I = inner_i_j[0]*dim;
-    inner_J = inner_i_j[1]*dim;
-    inner_K = inner_c*dim;
-
-    tile_I = ceil_div(dim_I_padded,inner_I);
-    tile_J = ceil_div(dim_J_padded,inner_J);
-    tile_K = ceil_div(dim_K_padded,inner_K);
-  }else{  // acc 최적화 decoding
-    inner_I = dim_I;
-    inner_J = (dim - dim_I)*2;
-    inner_K = dim;
-    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_K*2 <= dim_K_padded){
-      inner_K *= 2;
-    }
-    while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_J*2 <= dim_J_padded){
-      inner_J *= 2;
-    }
-
-    tile_I = ceil_div(inner_I,inner_I);
-    tile_J = ceil_div(dim_J_padded,inner_J);
-    tile_K = ceil_div(dim_K_padded,inner_K);
+    num_tiles = tile_I * tile_J;
   }
-
-  // tile을 core 배수로
-  if((tile_I*tile_J)%_config.num_cores!=0){
-    if(tile_I>tile_J){
-      tile_I += _config.num_cores - (tile_I%_config.num_cores);
-    }else{
-      tile_J += _config.num_cores - (tile_J%_config.num_cores);
+  if(num_tiles % _config.num_cores != 0) {
+    int increase_tile = num_tiles % _config.num_cores;
+    if(dim_J > dim_I && dim_J > _config.num_cores) {
+      tile_J += increase_tile;
+    } else if(dim_I > dim_J && dim_I > _config.num_cores) {
+      tile_I += increase_tile;
     }
   }
 
   inner_I = ceil_div(dim_I_padded, tile_I);
   inner_J = ceil_div(dim_J_padded, tile_J);
+  inner_K = ceil_div(dim_K_padded, tile_K);
 
-  uint32_t temp_inner_I = dim_I > 1<<5 ? inner_I : dim_I;
-  while((temp_inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && tile_K>1){
-    if(dim_K_padded<inner_K*2){
-      inner_K = dim_K_padded;
-      tile_K = 1;
-    }else{
-      inner_K *= 2;
-      tile_K /= 2;
-    }
-  }
+  inner_I -= inner_I & (dim)-1;
+  inner_J -= inner_J & (dim)-1;
+  inner_K -= inner_K & (dim)-1;
+
+  tile_I = ceil_div(dim_I, inner_I);
+  tile_J = ceil_div(dim_J, inner_J);
+  tile_K = ceil_div(dim_K, inner_K);
 
   /* create mapping entry */
   Mapping mapping;
@@ -155,7 +118,7 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   mapping.tile_in_loop = {inner_I, inner_K, inner_J, 1, 1, 1, 1};
   _mapping_table[key] = mapping;
   spdlog::info("[GEMM] spad_size: {} accum_size: {}", _config.core_config[key.target_core].spad_size * 1024, _config.core_config[key.target_core].accum_spad_size * 1024);
-  spdlog::info("[GEMM] required_sram_size: {} required_accum_size: {}", (inner_I+inner_J)*inner_K*_config.precision, (inner_I*inner_J)*_config.precision*2);
+  spdlog::info("[GEMM] required_sram_size: {} required_accum_size: {}", (inner_I+inner_J)*inner_K*_config.precision, (inner_I*inner_J)*_config.precision);
   spdlog::info("[GEMM] Used gemmini gemm mapping: Total N:{} C:{} M:{}, " \
     "Outer N:{} C:{} M:{}, " \
     "Inner N:{} C:{} M:{}",
@@ -164,6 +127,122 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
     mapping.tile_in_loop.N, mapping.tile_in_loop.C, mapping.tile_in_loop.M
   );
 }
+
+
+// // imp_4 tiling optimization //
+// void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
+//   uint32_t dim_I, dim_J, dim_K;
+//   uint32_t dim = _config.core_config[key.target_core].core_height;
+//   uint32_t max_spad_rows = (_config.core_config[key.target_core].spad_size KB) / (dim * _config.precision * 2);
+//   uint32_t max_acc_rows = (_config.core_config[key.target_core].accum_spad_size KB) / (dim * 4 * 2);
+
+//   assert(_config.core_config[key.target_core].core_height==_config.core_config[key.target_core].core_width);
+//   dim_I = key.N;
+//   dim_J = key.M;
+//   dim_K = key.C;
+
+//   const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim; // prefill
+//   const uint32_t dim_J_padded = (dim_J / dim + (dim_J % dim != 0 )) * dim;
+//   const uint32_t dim_K_padded = (dim_K / dim + (dim_K % dim != 0 )) * dim;
+
+//   uint32_t tile_I, tile_J, tile_K;
+//   uint32_t inner_I, inner_J, inner_K;
+//   uint32_t db_mats_in_spad, db_mats_in_acc_spad;
+//   uint32_t db_max_tile_i_j, db_max_tile_k;
+
+//   db_mats_in_spad = max_spad_rows / dim;  // 512
+//   db_mats_in_acc_spad = max_acc_rows / dim;  // 32
+
+//   uint32_t max_apad_usage = 1;
+//   uint32_t temp_i, temp_j, temp_k;
+//   std::deque<std::deque<int>> max_ij_queue;
+
+//   uint32_t log_spad_size = log2(db_mats_in_spad);
+//   uint32_t log_acc_spad_size = log2(db_mats_in_acc_spad);
+//   std::array<uint32_t,2> log_total_i_j = {ceil(log2(ceil_div(dim_I_padded,dim))), ceil(log2(ceil_div(dim_J_padded,dim)))};
+//   std::array<uint32_t,2> log_inner_i_j = {0, 0};
+//   std::array<uint32_t,2> log_outer_i_j = log_total_i_j;
+//   std::array<uint32_t,2> inner_i_j = {0, 0};
+//   uint32_t inner_c = dim_K_padded/dim;
+//   uint32_t turn = 0;
+
+//   // acc 최적화 -  prefill
+//   if(dim>>3 < dim_I){
+//     while((log_inner_i_j[0]+log_inner_i_j[1] < log_acc_spad_size) && (log_outer_i_j[0]+log_outer_i_j[1] > 2)){
+//       if(log_outer_i_j[turn] != 0){
+//         log_inner_i_j[turn] += 1;
+//         log_outer_i_j[turn] -= 1;
+//       }
+//       turn = (turn+1)%2;
+//     }
+//     inner_i_j = {1u<<log_inner_i_j[0],1u<<log_inner_i_j[1]};
+
+//     // C 최적화
+//     while((inner_i_j[0]+inner_i_j[1])*inner_c>db_mats_in_spad){
+//       inner_c /= 2;
+//     }
+//     inner_I = inner_i_j[0]*dim;
+//     inner_J = inner_i_j[1]*dim;
+//     inner_K = inner_c*dim;
+
+//     tile_I = ceil_div(dim_I_padded,inner_I);
+//     tile_J = ceil_div(dim_J_padded,inner_J);
+//     tile_K = ceil_div(dim_K_padded,inner_K);
+//   }else{  // acc 최적화 decoding
+//     inner_I = dim_I;
+//     inner_J = (dim - dim_I)*2;
+//     inner_K = dim;
+//     while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_K*2 <= dim_K_padded){
+//       inner_K *= 2;
+//     }
+//     while((inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && inner_J*2 <= dim_J_padded){
+//       inner_J *= 2;
+//     }
+
+//     tile_I = ceil_div(inner_I,inner_I);
+//     tile_J = ceil_div(dim_J_padded,inner_J);
+//     tile_K = ceil_div(dim_K_padded,inner_K);
+//   }
+
+//   // tile을 core 배수로
+//   if((tile_I*tile_J)%_config.num_cores!=0){
+//     if(tile_I>tile_J){
+//       tile_I += _config.num_cores - (tile_I%_config.num_cores);
+//     }else{
+//       tile_J += _config.num_cores - (tile_J%_config.num_cores);
+//     }
+//   }
+
+//   inner_I = ceil_div(dim_I_padded, tile_I);
+//   inner_J = ceil_div(dim_J_padded, tile_J);
+
+//   uint32_t temp_inner_I = dim_I > 1<<5 ? inner_I : dim_I;
+//   while((temp_inner_I+inner_J)*inner_K*_config.precision < _config.core_config[key.target_core].spad_size * 1024 / (2*2) && tile_K>1){
+//     if(dim_K_padded<inner_K*2){
+//       inner_K = dim_K_padded;
+//       tile_K = 1;
+//     }else{
+//       inner_K *= 2;
+//       tile_K /= 2;
+//     }
+//   }
+
+//   /* create mapping entry */
+//   Mapping mapping;
+//   mapping.total_loop = {dim_I, dim_K, dim_J, 1, 1, 1, 1};
+//   mapping.tile_out_loop = {tile_I, tile_K, tile_J, 1, 1, 1, 1};
+//   mapping.tile_in_loop = {inner_I, inner_K, inner_J, 1, 1, 1, 1};
+//   _mapping_table[key] = mapping;
+//   spdlog::info("[GEMM] spad_size: {} accum_size: {}", _config.core_config[key.target_core].spad_size * 1024, _config.core_config[key.target_core].accum_spad_size * 1024);
+//   spdlog::info("[GEMM] required_sram_size: {} required_accum_size: {}", (inner_I+inner_J)*inner_K*_config.precision, (inner_I*inner_J)*_config.precision*2);
+//   spdlog::info("[GEMM] Used gemmini gemm mapping: Total N:{} C:{} M:{}, " \
+//     "Outer N:{} C:{} M:{}, " \
+//     "Inner N:{} C:{} M:{}",
+//     mapping.total_loop.N, mapping.total_loop.C, mapping.total_loop.M,
+//     mapping.tile_out_loop.N, mapping.tile_out_loop.C, mapping.tile_out_loop.M,
+//     mapping.tile_in_loop.N, mapping.tile_in_loop.C, mapping.tile_in_loop.M
+//   );
+// }
 
 const Mapping& MappingTable::fallback_mapping(Mapping::LoopCounts &key) {
   if (key.P==1 && key.Q==1 && key.S==1 && key.R==1)
