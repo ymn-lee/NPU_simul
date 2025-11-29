@@ -13,6 +13,5 @@ class GemmWS : public Gemm {
   bool has_bias = true;
  protected:
   virtual void initialize_instructions(Tile* tile, Mapping mapping) override;
-  virtual void initialize_instructions(Tile* tile, Mapping mapping, uint32_t num_cores);
  private:
 };

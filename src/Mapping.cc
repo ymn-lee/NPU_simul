@@ -56,11 +56,11 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   uint32_t max_acc_rows = (_config.core_config[key.target_core].accum_spad_size KB) / (dim * 4 * 2);
 
   assert(_config.core_config[key.target_core].core_height==_config.core_config[key.target_core].core_width);
-  dim_I = key.N/_config.num_cores;
+  dim_I = key.N;
   dim_J = key.M;
   dim_K = key.C;
 
-  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim; // input alloc separated ch
+  const uint32_t dim_I_padded = (dim_I / dim + (dim_I % dim != 0 )) * dim;
   const uint32_t dim_J_padded = (dim_J / dim + (dim_J % dim != 0 )) * dim;
   const uint32_t dim_K_padded = (dim_K / dim + (dim_K % dim != 0 )) * dim;
 
@@ -110,16 +110,11 @@ void MappingTable::gemm_mapping(Mapping::LoopCounts &key) {
   tile_J = ceil_div(dim_J, inner_J);
   tile_K = ceil_div(dim_K, inner_K);
 
-  // tile_I = tile_I/_config.num_cores;
-  dim_I = dim_I*_config.num_cores; // adding
-  inner_I = inner_I*_config.num_cores; // adding
-
   /* create mapping entry */
   Mapping mapping;
   mapping.total_loop = {dim_I, dim_K, dim_J, 1, 1, 1, 1};
   mapping.tile_out_loop = {tile_I, tile_K, tile_J, 1, 1, 1, 1};
   mapping.tile_in_loop = {inner_I, inner_K, inner_J, 1, 1, 1, 1};
-  mapping.tile_chunk = tile_I*tile_J;
   _mapping_table[key] = mapping;
   spdlog::info("[GEMM] spad_size: {} accum_size: {}", _config.core_config[key.target_core].spad_size * 1024, _config.core_config[key.target_core].accum_spad_size * 1024);
   spdlog::info("[GEMM] required_sram_size: {} required_accum_size: {}", (inner_I+inner_J)*inner_K*_config.precision, (inner_I*inner_J)*_config.precision);
