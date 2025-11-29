@@ -582,6 +582,9 @@ void Core::handle_ld_inst_queue() {
       if(front->operand_id==100){
         buffer->is_valid[buffer_id] += front->size;
       }
+      // if(front->operand_id!=102){
+      //   spdlog::info("core=[{},{}], ld size={}<={}({}), id={}, cycle={}",_id, buffer_id, front->size, _request_queue.size(), front->src_addrs.size(),front->operand_id,_core_cycle);
+      // }
       _ld_inst_queue.pop();
     }
     } else {

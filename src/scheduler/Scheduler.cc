@@ -73,7 +73,32 @@ void Scheduler::issue_tile_per_core(std::vector<uint32_t>& allowed_cpu, int offs
   }
 }
 
-void Scheduler::issue_tile_per_core() {  // imp_5 reuse_spad
+// void Scheduler::issue_tile_per_core() {  // imp_5 reuse_spad
+//   while(!_executable_tile_queue[0].empty()) {
+//     std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
+//     /* Barrier! */
+//     if (tile->status == Tile::Status::BAR)
+//       break;
+
+//     if (tile->core_id == -1) { // -1 is global id
+//       tile->core_id = _core_rr_id % _config.num_cores;
+//       _core_rr_id++; // increase with round robin
+//     } else {
+//       tile->core_id = (tile->core_id + _nr_layer) % _config.num_cores;
+//     }
+//     _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
+//     _executable_tile_queue[0].pop_front();
+//     if(divided_c && !_executable_tile_queue[0].empty()){ 
+//         std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
+//         if (tile->status == Tile::Status::BAR)
+//            break;
+//         _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
+//         _executable_tile_queue[0].pop_front();
+//       }
+//   }
+// }
+
+void Scheduler::issue_tile_per_core() {
   while(!_executable_tile_queue[0].empty()) {
     std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
     /* Barrier! */
@@ -88,13 +113,6 @@ void Scheduler::issue_tile_per_core() {  // imp_5 reuse_spad
     }
     _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
     _executable_tile_queue[0].pop_front();
-    if(divided_c && !_executable_tile_queue[0].empty()){ 
-        std::unique_ptr<Tile>& tile = _executable_tile_queue[0].front();
-        if (tile->status == Tile::Status::BAR)
-           break;
-        _core_executable_tile_queue[tile->core_id].push_back(std::move(tile));
-        _executable_tile_queue[0].pop_front();
-      }
   }
 }
 

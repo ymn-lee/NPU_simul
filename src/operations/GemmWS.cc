@@ -580,6 +580,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
           std::set<addr_type> input_set;
           std::set<addr_type> input_set_copy;
           for (int iter_n = 0; iter_n < n_loop; iter_n++) {
+            cnt = 0;
             for (int iter_c = 0; iter_c < c_in_loop; iter_c+=elems_per_access) {
               uint32_t N = N_offset + iter_n;
               uint32_t C = C_offset + iter_c;
@@ -591,8 +592,15 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
                 index = {N, C};
               input_set.insert(
                   first_addr + make_address(index, _input_shape));
-              if((iter_n+tile->core_id)%_config.num_cores==0){
-                input_set_copy.insert(first_addr + make_address(index, _input_shape));
+              if(n_loop>8){
+                if((iter_n+tile->core_id)%_config.num_cores==0){
+                  input_set_copy.insert(first_addr + make_address(index, _input_shape));
+                }
+              }else{
+                if(cnt%_config.num_cores==tile->core_id){
+                  input_set_copy.insert(first_addr + make_address(index, _input_shape));
+                }
+                cnt = (cnt+1)%_config.num_cores;
               }
             }
           }
@@ -605,7 +613,7 @@ void GemmWS::initialize_instructions(Tile* tile, Mapping mapping) {
               .tile_k = mapping.tile_in_loop.C,
               .tile_n = mapping.tile_in_loop.N}));
         }
-      cnt = (cnt+1)%_config.num_cores;
+      
       }
     }
   }
