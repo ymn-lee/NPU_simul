@@ -371,7 +371,8 @@ void Core::finish_vector_pipeline() {
 }
 
 void Core::handle_ld_inst_queue() {
-  if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  // if (!_ld_inst_queue.empty() && _spad.is_valid[_ld_inst_queue.front()->spad_id]) {  // imp_2 guaranteed load
+  if (!_ld_inst_queue.empty()) {  
     std::unique_ptr<Instruction> front = std::move(_ld_inst_queue.front());
     if (front->opcode == Opcode::MOVIN) {
       bool prefetched = false;
