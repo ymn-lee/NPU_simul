@@ -322,25 +322,25 @@ uint32_t Simulator::get_dest_node(MemoryAccess *access, std::vector<bool> idle_l
   uint32_t result_id; 
   bool available = true;
 
-  for(int j=0; j<4; ++j){
-    available = _dram->is_available(core_id*4+j);
-    if(!available) break;
-  }
+  // for(int j=0; j<4; ++j){
+  //   available = _dram->is_available(core_id*4+j);
+  //   if(!available) break;
+  // }
 
-  if(!available){
-    for(int i=1; i<_config.num_cores; ++i){
-      int turn = (i+cur_turn)%_config.num_cores;
-      if(!temp_idle_ld_cores[turn]) continue;
-      for(int j=0; j<4; ++j){
-        available = _dram->is_available(turn*4+j);
-        if(!available) break;
-      }
-      if(!available) continue;
-      core_turn[core_id] = turn;
-      upper_2bit = turn;
-      break;
-    }
-  }
+  // if(!available){
+  //   for(int i=1; i<_config.num_cores; ++i){
+  //     int turn = (i+cur_turn)%_config.num_cores;
+  //     if(!temp_idle_ld_cores[turn]) continue;
+  //     for(int j=0; j<4; ++j){
+  //       available = _dram->is_available(turn*4+j);
+  //       if(!available) break;
+  //     }
+  //     if(!available) continue;
+  //     core_turn[core_id] = turn;
+  //     upper_2bit = turn;
+  //     break;
+  //   }
+  // }
   
   result_id = _config.num_cores + ((upper_2bit & 3)<<2)+(lower_2bit & 3);
 
