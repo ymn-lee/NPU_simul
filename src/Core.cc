@@ -29,15 +29,19 @@ Core::Core(uint32_t id, SimulationConfig config)
   _running_layer = -1;
 }
 
-bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
-  bool result = false;
-  if(_tiles.size() < 1){
-    result = true;
-  // }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
-  }else if((_tiles.size() < 2) && (core_run)){
-    result = true;
-  }
-  return result;
+// bool Core::can_issue(bool is_accum_tile) {  // imp_3_interleaved_tile
+//   bool result = false;
+//   if(_tiles.size() < 1){
+//     result = true;
+//   // }else if((_tiles.size() < 2) && (_spad.can_issue_second_tile==0)){
+//   }else if((_tiles.size() < 2) && (core_run)){
+//     result = true;
+//   }
+//   return result;
+// }
+
+bool Core::can_issue(bool is_accum_tile) {
+  return _tiles.size() < 2;  // double buffer
 }
 
 void Core::issue(std::unique_ptr<Tile> op) {
