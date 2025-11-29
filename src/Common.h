@@ -131,6 +131,7 @@ uint32_t generate_id();
 uint32_t generate_mem_access_id();
 addr_type allocate_address(uint32_t size);
 SimulationConfig initialize_config(json config);
+addr_type re_mapping_ch(addr_type addr, uint32_t ch);
 template <typename... Args>
 std::string name_gen(Args... args) {
     std::vector<std::string> strs = {args...};

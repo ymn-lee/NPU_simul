@@ -187,9 +187,10 @@ void Simulator::cycle() {
           front->core_id = core_id;
           if (!_icnt->is_full(core_id, front)) {
             if(_scheduler->layer_num == _scheduler->layer_num_check){
-              spdlog::info("c2i,core={},ch={},addr={},cycle={}",core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id)-4, front->dram_address, _core_cycles);
+              spdlog::info("c2i,core={},buffer_id={},ch={},addr={},op={},cycle={}",core_id, front->buffer_id, get_dest_node(front)-4, front->dram_address, front->operand_id, _core_cycles);
             }
-            _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
+            // _icnt->push(core_id, get_dest_node(front, idle_ld_cores, core_turn, core_id), front);  // imp_1_separated_ch
+            _icnt->push(core_id, get_dest_node(front), front);
             _cores[core_id]->pop_memory_request();
             _nr_from_core++;
             if(_scheduler->layer_num==_scheduler->layer_num_check){
@@ -212,7 +213,7 @@ void Simulator::cycle() {
         if (!_icnt->is_empty(_n_cores + mem_id) &&
             !_dram->is_full(mem_id, _icnt->top(_n_cores + mem_id))) {
           if(_scheduler->layer_num == _scheduler->layer_num_check){
-            spdlog::info("i2d,core={},ch={},addr={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, _core_cycles);
+            spdlog::info("i2d,core={},buffer_id={},ch={},addr={},op={},cycle={}",_icnt->top(_n_cores + mem_id)->core_id, _icnt->top(_n_cores + mem_id)->buffer_id, mem_id, _icnt->top(_n_cores + mem_id)->dram_address, _icnt->top(_n_cores + mem_id)->operand_id,_core_cycles);
           }
           _dram->push(mem_id, _icnt->top(_n_cores + mem_id));
           _icnt->pop(_n_cores + mem_id);
@@ -221,7 +222,8 @@ void Simulator::cycle() {
         // Pop response to ICNT from dram
         if (!_dram->is_empty(mem_id) &&
             !_icnt->is_full(_n_cores + mem_id, _dram->top(mem_id))) {
-          _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id), idle_ld_cores, core_turn, _dram->top(mem_id)->core_id), _dram->top(mem_id));  // imp_1_separated_ch
+          // _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id), idle_ld_cores, core_turn, _dram->top(mem_id)->core_id), _dram->top(mem_id));  // imp_1_separated_ch
+          _icnt->push(_n_cores + mem_id, get_dest_node(_dram->top(mem_id)), _dram->top(mem_id));
           _dram->pop(mem_id);
           _nr_from_mem++;
         }

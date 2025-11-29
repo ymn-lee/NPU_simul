@@ -1,4 +1,5 @@
 #include "Common.h"
+#include <bitset>
 
 uint32_t generate_id() {
   static uint32_t id_counter{0};
@@ -21,6 +22,50 @@ addr_type allocate_address(uint32_t size) {
   base_addr += (size + offset);
   base_addr += (256 - base_addr % 256);
   return result;
+}
+
+uint32_t hash_mapping_table(uint32_t xor_offset) {  // 16bit hashing
+    static const std::array<uint8_t, 16> xor_to_lower4 = {
+        0x0, // offset 0000 -> lower 0000
+        0xE, // offset 0001 -> lower 1110
+        0xF, // offset 0010 -> lower 1111
+        0x1, // offset 0011 -> lower 0001
+        0xD, // offset 0100 -> lower 1101
+        0x3, // offset 0101 -> lower 0011
+        0x2, // offset 0110 -> lower 0010
+        0xC, // offset 0111 -> lower 1100
+        0x9, // offset 1000 -> lower 1001
+        0x7, // offset 1001 -> lower 0111
+        0x6, // offset 1010 -> lower 0110
+        0x8, // offset 1011 -> lower 1000
+        0x4, // offset 1100 -> lower 0100
+        0xA, // offset 1101 -> lower 1010
+        0xB, // offset 1110 -> lower 1011
+        0x5  // offset 1111 -> lower 0101
+    };
+    return xor_to_lower4[xor_offset];
+}
+
+addr_type re_mapping_ch(addr_type addr, uint32_t ch){
+  std::bitset<4> ipoly_hash_bit;
+  std::bitset<4> target_ch = ch;
+  std::bitset<64> a = addr>>9;
+  std::bitset<4> xor_offset;
+  uint32_t lower_4bit;
+  addr_type new_addr;
+
+  ipoly_hash_bit[3] = a[6]^a[5]^a[4]^a[3]^a[1];
+  ipoly_hash_bit[2] = a[5]^a[4]^a[3]^a[2]^a[0];
+  ipoly_hash_bit[1] = a[8]^a[4]^a[3]^a[2]^a[1];
+  ipoly_hash_bit[0] = a[7]^a[6]^a[5]^a[4]^a[2]^a[0];
+
+  xor_offset = ipoly_hash_bit ^ target_ch;
+
+  lower_4bit = hash_mapping_table(xor_offset.to_ulong());
+
+  new_addr = (a.to_ulong()<<9) | (lower_4bit&15)<<5;
+
+  return new_addr;
 }
 
 template <typename T>
@@ -172,3 +217,4 @@ std::string dims_to_string(const std::vector<uint32_t> &dims){
   }
   return str;
 }
+

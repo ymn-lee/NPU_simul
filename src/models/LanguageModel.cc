@@ -161,9 +161,12 @@ void LanguageModel::initialize_model(std::vector<std::unique_ptr<Tensor>>& weigh
   std::vector<uint32_t> input_lengthes;
   uint32_t num_tokens = 0;
   for(auto& req : _reqs) {
-    num_tokens += req.seq_length;
-    input_lengthes.push_back(req.seq_length);
+    num_tokens += req.seq_length * _config.num_cores; // adding
+    input_lengthes.push_back(req.seq_length*_config.num_cores); // adding
   }
+
+  // num_tokens = num_tokens*_config.num_cores; // adding 
+  
   std::vector<uint32_t> act_dim = {num_tokens, _hidden_size};
   std::map<std::string, std::string> qkv_attr  = {
     {"has_bias", "1"},
