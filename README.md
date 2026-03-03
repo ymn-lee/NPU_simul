@@ -1,3 +1,8 @@
+# Optimization Techniques for LLM Inference on a Multi-NPU System
+## Graduation Research Exhibition
+![image](https://github.com/user-attachments/assets/8fed1ea5-4c3e-46ad-99d5-199753a6789a)
+
+
 # ONNXim: A Fast, Cycle-level Multi-core NPU Simulator
 [![Docker Image CI](https://github.com/PSAL-POSTECH/ONNXim/actions/workflows/docker-image.yml/badge.svg)](https://github.com/PSAL-POSTECH/ONNXim/actions/workflows/docker-image.yml)
 
